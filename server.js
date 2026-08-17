@@ -4,13 +4,13 @@ const path = require("path");
 const app = express();
 
 const PORT = process.env.PORT || 3000;
-
 const distPath = path.join(__dirname, "dist");
 
+// Serve Expo web build
 app.use(express.static(distPath));
 
-// Expo Router / SPA fallback
-app.get("*", (req, res) => {
+// SPA fallback for Expo Router
+app.use((req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
