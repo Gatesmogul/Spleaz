@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "Spleaz",
+    "slug": "spleaz",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/Spleaz_App_Logo.png",
+    "scheme": "spleaz",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/Spleaz_App_Logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.spleaz.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Spleaz needs access to your location to find nearby rides and display driver pickup routes.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Spleaz tracks driver position in real time to ensure accurate pickup ETA and route navigation.",
+        "NSCameraUsageDescription": "Spleaz requires camera access for uploading driver verification documents and payment receipts."
+      },
+      "config": {
+        "googleMapsApiKey": "YOUR_IOS_GOOGLE_MAPS_API_KEY"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/Spleaz_App_Logo.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.spleaz.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "CAMERA"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_ANDROID_GOOGLE_MAPS_API_KEY"
+        }
+      }
+    },
+    "web": {
+      "favicon": "./assets/Spleaz_App_Logo.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Spleaz needs your location to match you with nearby drivers and show live navigation."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Spleaz to access your camera for document scanning and receipt uploads."
+        }
+      ],
+      "expo-asset",
+      "expo-secure-store",
+      "expo-localization"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

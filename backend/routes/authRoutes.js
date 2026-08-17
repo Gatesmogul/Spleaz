@@ -1,0 +1,14 @@
+const express=require('express');
+const router=express.Router();
+const {register,login,getMe,updateProfile,updatePassword,forgotPassword,resetPassword}=require('../controllers/authController');
+const {protect}=require('../middleware/authMiddleware');
+router.post('/register',register);
+router.post('/login',login);
+router.get('/me',protect,getMe);
+router.get('/profile',protect,getMe);
+router.put('/profile',protect,updateProfile);
+router.put('/update-password',protect,updatePassword);
+router.post('/forgot-password',forgotPassword);
+router.post('/reset-password',resetPassword);
+router.post('/signout',protect,(req,res)=>res.json({success:true,message:'Signed out successfully.'}));
+module.exports=router;

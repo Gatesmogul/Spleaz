@@ -1,0 +1,11 @@
+const express=require('express');
+const router=express.Router();
+const {generateTrackingLink,sendTrackingEmail,getPublicTripDetails,getRideLocation}=require('../controllers/trackingController');
+const {protect}=require('../middleware/authMiddleware');
+router.get('/public/:trackingToken',getPublicTripDetails);
+router.use(protect);
+router.get('/:rideId/location',getRideLocation);
+router.post('/:rideId/generate-link',generateTrackingLink);
+router.post('/:rideId/share-email',sendTrackingEmail);
+router.post('/:rideId/send-tracking-email', (req,res,next)=>{ req.body.recipientEmail=req.body.email||req.body.recipientEmail; return sendTrackingEmail(req,res,next); });
+module.exports=router;
