@@ -7,10 +7,7 @@ const path = require('path');
 
 const connectDB = require('./config/db');
 const { initSocket } = require('./config/socket');
-const {
-  notFoundHandler,
-  errorHandler,
-} = require('./middleware/errorHandler');
+const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 const authRoutes = require('./routes/authRoutes');
 const rideRoutes = require('./routes/rideRoutes');
@@ -23,18 +20,15 @@ const app = express();
 
 app.disable('x-powered-by');
 
-// ======================================================
-// CORS
-// ======================================================
-const allowedOrigin = process.env.CLIENT_ORIGIN || '*';
-
+// ==========================================
+// CORS CONFIGURATION
+// ==========================================
 app.use(
   cors({
-    origin: allowedOrigin,
+    origin: process.env.CLIENT_ORIGIN || '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 
-// ======================================================
-// BODY PARSING
+// ==========================================
