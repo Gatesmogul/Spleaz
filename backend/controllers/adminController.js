@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 const User = require('../models/User');
 
@@ -18,14 +19,33 @@ const {
 } = require('../services/adminEmailService');
 
 /**
- * Generate a secure one-time password setup token.
+ * ============================================================
+ * CONFIGURATION
+ * ============================================================
+ */
+
+const PASSWORD_SETUP_EXPIRY_MINUTES = 30;
+const BCRYPT_SALT_ROUNDS = 12;
+
+/**
+ * ============================================================
+ * HELPER FUNCTIONS
+ * ============================================================
+ */
+
+/**
+ * Generate a cryptographically secure one-time password
+ * setup token.
  */
 function generatePasswordSetupToken() {
   return crypto.randomBytes(48).toString('hex');
 }
 
 /**
- * Hash password setup token before storing it.
+ * Hash a password setup token before storing it.
+ *
+ * The raw token is only sent through the email link.
+ * The database stores only the hash.
  */
 function hashToken(token) {
   return crypto
@@ -35,12 +55,33 @@ function hashToken(token) {
 }
 
 /**
- * Founder Admin bootstrap.
+ * Create a temporary random password.
  *
- * This creates the three protected Founder Admin records
- * if they do not already exist.
+ * This password is never sent to the administrator.
+ * The administrator must use the password setup email.
+ */
+function generateTemporaryPassword() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+/**
+ * ============================================================
+ * FOUNDER ADMIN BOOTSTRAP
+ * ============================================================
+ */
+
+/**
+ * Create or repair the protected Founder Admin accounts.
  *
- * No password is generated or stored.
+ * Founder Admin emails are defined in:
+ *
+ * backend/admin/founderAdmin.js
+ *
+ * Founder accounts:
+ * - Cannot be downgraded to Senior Admin
+ * - Cannot be downgraded to Junior Admin
+ * - Are always marked as administrators
+ * - Must set their own password
  */
 async function bootstrapFounderAdmins() {
   for (const email of FOUNDER_ADMIN_EMAILS) {
@@ -48,9 +89,25 @@ async function bootstrapFounderAdmins() {
 
     let user = await User.findOne({
       email: normalizedEmail,
-    });
+    }).select('+password');
 
     if (!user) {
+      /**
+       * User.password is required by the User schema.
+       *
+       * We therefore create a random temporary password.
+       * The administrator does not receive this password.
+       * They receive a secure password setup email instead.
+       */
+      const temporaryPassword =
+        generateTemporaryPassword();
+
+      const hashedTemporaryPassword =
+        await bcrypt.hash(
+          temporaryPassword,
+          BCRYPT_SALT_ROUNDS
+        );
+
       user = await User.create({
         email: normalizedEmail,
 
@@ -58,13 +115,16 @@ async function bootstrapFounderAdmins() {
 
         role: 'admin',
 
+        password: hashedTemporaryPassword,
+
         isAdmin: true,
 
         adminRole: ADMIN_ROLES.FOUNDER,
 
-        adminPermissions: getAdminPermissions(
-          ADMIN_ROLES.FOUNDER
-        ),
+        adminPermissions:
+          getAdminPermissions(
+            ADMIN_ROLES.FOUNDER
+          ),
 
         isActive: true,
 
@@ -75,12 +135,30 @@ async function bootstrapFounderAdmins() {
         createdByAdmin: 'SYSTEM',
       });
     } else {
+      /**
+       * Founder email addresses are permanently protected.
+       */
       user.isAdmin = true;
-      user.adminRole = ADMIN_ROLES.FOUNDER;
+      user.role = 'admin';
+
+      user.adminRole =
+        ADMIN_ROLES.FOUNDER;
+
       user.adminPermissions =
-        getAdminPermissions(ADMIN_ROLES.FOUNDER);
+        getAdminPermissions(
+          ADMIN_ROLES.FOUNDER
+        );
+
       user.isActive = true;
       user.isSuspended = false;
+      user.mustSetPassword = true;
+
+      /**
+       * Existing Founder accounts are not given a new
+       * password automatically.
+       *
+       * They must use the password setup endpoint.
+       */
 
       await user.save();
     }
@@ -88,18 +166,37 @@ async function bootstrapFounderAdmins() {
 }
 
 /**
- * Send password setup email to an administrator.
+ * ============================================================
+ * ADMIN PASSWORD SETUP
+ * ============================================================
+ */
+
+/**
+ * Generate and send a password setup email to an administrator.
+ *
+ * The password setup token:
+ * - Is randomly generated
+ * - Is hashed before database storage
+ * - Expires after 30 minutes
+ * - Can only be used once
  */
 async function sendPasswordSetupForAdmin(user) {
-  const token = generatePasswordSetupToken();
+  const token =
+    generatePasswordSetupToken();
 
-  const tokenHash = hashToken(token);
+  const tokenHash =
+    hashToken(token);
 
-  user.passwordResetTokenHash = tokenHash;
+  user.passwordResetTokenHash =
+    tokenHash;
 
-  user.passwordResetExpiresAt = new Date(
-    Date.now() + 30 * 60 * 1000
-  );
+  user.passwordResetExpiresAt =
+    new Date(
+      Date.now() +
+        PASSWORD_SETUP_EXPIRY_MINUTES *
+          60 *
+          1000
+    );
 
   user.mustSetPassword = true;
 
@@ -114,32 +211,74 @@ async function sendPasswordSetupForAdmin(user) {
 
 /**
  * Request password setup for a Founder Admin.
+ *
+ * POST:
+ *
+ * /auth/admin/request-password-setup
+ *
+ * Body:
+ *
+ * {
+ *   "email": "founder@example.com"
+ * }
  */
-async function requestFounderPasswordSetup(req, res, next) {
+async function requestFounderPasswordSetup(
+  req,
+  res,
+  next
+) {
   try {
-    const email = normalizeEmail(req.body.email);
+    const email = normalizeEmail(
+      req.body?.email
+    );
 
-    if (!isFounderAdminEmail(email)) {
-      return res.status(403).json({
+    if (!email) {
+      return res.status(400).json({
         success: false,
-        message: 'This email is not authorized as a Founder Admin.',
+        message:
+          'Email address is required.',
       });
     }
 
-    const user = await User.findOne({
-      email,
-      isAdmin: true,
-      adminRole: ADMIN_ROLES.FOUNDER,
-    });
+    /**
+     * Only the three protected Founder Admin
+     * email addresses may use this endpoint.
+     */
+    if (!isFounderAdminEmail(email)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'This email is not authorized as a Founder Admin.',
+      });
+    }
+
+    const user =
+      await User.findOne({
+        email,
+        isAdmin: true,
+        adminRole:
+          ADMIN_ROLES.FOUNDER,
+      });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'Founder Admin account has not been initialized.',
+        message:
+          'Founder Admin account has not been initialized.',
       });
     }
 
-    await sendPasswordSetupForAdmin(user);
+    if (user.isSuspended) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'This administrator account is suspended.',
+      });
+    }
+
+    await sendPasswordSetupForAdmin(
+      user
+    );
 
     return res.status(200).json({
       success: true,
@@ -152,22 +291,208 @@ async function requestFounderPasswordSetup(req, res, next) {
 }
 
 /**
- * Create a Senior or Junior Admin.
+ * Set a new administrator password using the one-time
+ * password setup token.
  *
- * Only Founder Admins and permitted Senior Admins can
- * create Junior Admins.
+ * POST:
+ *
+ * /auth/admin/set-password
+ *
+ * Body:
+ *
+ * {
+ *   "token": "...",
+ *   "newPassword": "..."
+ * }
  */
-async function createAdmin(req, res, next) {
+async function setAdminPassword(
+  req,
+  res,
+  next
+) {
+  try {
+    const {
+      token,
+      newPassword,
+    } = req.body || {};
+
+    if (
+      !token ||
+      typeof token !== 'string'
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password setup token is required.',
+      });
+    }
+
+    if (
+      !newPassword ||
+      typeof newPassword !== 'string'
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'New password is required.',
+      });
+    }
+
+    /**
+     * Enforce a strong administrator password.
+     */
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must be at least 8 characters long.',
+      });
+    }
+
+    if (!/[A-Z]/.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must contain at least one uppercase letter.',
+      });
+    }
+
+    if (!/[a-z]/.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must contain at least one lowercase letter.',
+      });
+    }
+
+    if (!/[0-9]/.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must contain at least one number.',
+      });
+    }
+
+    if (
+      !/[^A-Za-z0-9]/.test(newPassword)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must contain at least one special character.',
+      });
+    }
+
+    const tokenHash =
+      hashToken(token);
+
+    /**
+     * Find an administrator whose password setup
+     * token matches and has not expired.
+     */
+    const admin =
+      await User.findOne({
+        isAdmin: true,
+        passwordResetTokenHash:
+          tokenHash,
+        passwordResetExpiresAt: {
+          $gt: new Date(),
+        },
+      }).select('+password');
+
+    if (!admin) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password setup token is invalid or has expired.',
+      });
+    }
+
+    if (admin.isSuspended) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'This administrator account is suspended.',
+      });
+    }
+
+    /**
+     * Hash the administrator's new password.
+     */
+    admin.password =
+      await bcrypt.hash(
+        newPassword,
+        BCRYPT_SALT_ROUNDS
+      );
+
+    /**
+     * Password has now been successfully established.
+     */
+    admin.mustSetPassword = false;
+
+    /**
+     * Invalidate the setup token immediately.
+     * This makes the password setup link one-time use.
+     */
+    admin.passwordResetTokenHash = null;
+    admin.passwordResetExpiresAt = null;
+
+    admin.passwordChangedAt =
+      new Date();
+
+    admin.isActive = true;
+
+    await admin.save();
+
+    return res.status(200).json({
+      success: true,
+      message:
+        'Administrator password has been set successfully. You can now sign in.',
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * ============================================================
+ * CREATE ADMINISTRATOR
+ * ============================================================
+ */
+
+/**
+ * Create a Senior Admin or Junior Admin.
+ *
+ * Founder Admin:
+ * - Can create Senior Admins
+ * - Can create Junior Admins
+ *
+ * Senior Admin:
+ * - Can create Junior Admins only
+ *
+ * Junior Admin:
+ * - Cannot create administrators
+ */
+async function createAdmin(
+  req,
+  res,
+  next
+) {
   try {
     const {
       email,
       fullName,
       adminRole,
-    } = req.body;
+    } = req.body || {};
 
-    const normalizedEmail = normalizeEmail(email);
+    const normalizedEmail =
+      normalizeEmail(email);
 
-    if (!normalizedEmail || !fullName || !adminRole) {
+    if (
+      !normalizedEmail ||
+      !fullName ||
+      !adminRole
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -189,10 +514,13 @@ async function createAdmin(req, res, next) {
     }
 
     /**
-     * Founder email addresses can never be downgraded
-     * into Junior/Senior Admin accounts.
+     * Founder emails are permanently protected.
      */
-    if (isFounderAdminEmail(normalizedEmail)) {
+    if (
+      isFounderAdminEmail(
+        normalizedEmail
+      )
+    ) {
       return res.status(409).json({
         success: false,
         message:
@@ -201,11 +529,25 @@ async function createAdmin(req, res, next) {
     }
 
     /**
+     * req.admin should be populated by the
+     * administrator authorization middleware.
+     */
+    if (!req.admin) {
+      return res.status(401).json({
+        success: false,
+        message:
+          'Administrator authentication is required.',
+      });
+    }
+
+    /**
      * Senior Admins can only create Junior Admins.
      */
     if (
-      req.admin.adminRole === ADMIN_ROLES.SENIOR &&
-      adminRole !== ADMIN_ROLES.JUNIOR
+      req.admin.adminRole ===
+        ADMIN_ROLES.SENIOR &&
+      adminRole !==
+        ADMIN_ROLES.JUNIOR
     ) {
       return res.status(403).json({
         success: false,
@@ -214,9 +556,24 @@ async function createAdmin(req, res, next) {
       });
     }
 
-    const existingUser = await User.findOne({
-      email: normalizedEmail,
-    });
+    /**
+     * Junior Admins cannot create administrators.
+     */
+    if (
+      req.admin.adminRole ===
+      ADMIN_ROLES.JUNIOR
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Junior Admins do not have permission to create administrator accounts.',
+      });
+    }
+
+    const existingUser =
+      await User.findOne({
+        email: normalizedEmail,
+      });
 
     if (existingUser) {
       return res.status(409).json({
@@ -226,30 +583,67 @@ async function createAdmin(req, res, next) {
       });
     }
 
-    const newAdmin = await User.create({
-      email: normalizedEmail,
+    /**
+     * User.password is required by the schema.
+     *
+     * Generate a random temporary password and hash it.
+     * The administrator never receives this password.
+     */
+    const temporaryPassword =
+      generateTemporaryPassword();
 
-      fullName: fullName.trim(),
+    const hashedTemporaryPassword =
+      await bcrypt.hash(
+        temporaryPassword,
+        BCRYPT_SALT_ROUNDS
+      );
 
-      role: 'admin',
+    const newAdmin =
+      await User.create({
+        email: normalizedEmail,
 
-      isAdmin: true,
+        fullName:
+          String(fullName).trim(),
 
-      adminRole,
+        role: 'admin',
 
-      adminPermissions:
-        getAdminPermissions(adminRole),
+        password:
+          hashedTemporaryPassword,
 
-      isActive: true,
+        isAdmin: true,
 
-      isSuspended: false,
+        adminRole,
 
-      mustSetPassword: true,
+        adminPermissions:
+          getAdminPermissions(
+            adminRole
+          ),
 
-      createdByAdmin: req.admin.email,
-    });
+        isActive: true,
 
-    await sendPasswordSetupForAdmin(newAdmin);
+        isSuspended: false,
+
+        mustSetPassword: true,
+
+        createdByAdmin:
+          req.admin.email,
+      });
+
+    try {
+      await sendPasswordSetupForAdmin(
+        newAdmin
+      );
+    } catch (emailError) {
+      /**
+       * Do not leave an administrator account
+       * without a usable password setup process.
+       */
+      await User.findByIdAndDelete(
+        newAdmin._id
+      );
+
+      throw emailError;
+    }
 
     return res.status(201).json({
       success: true,
@@ -258,9 +652,12 @@ async function createAdmin(req, res, next) {
       data: {
         id: newAdmin._id,
         email: newAdmin.email,
-        fullName: newAdmin.fullName,
-        adminRole: newAdmin.adminRole,
-        permissions: newAdmin.adminPermissions,
+        fullName:
+          newAdmin.fullName,
+        adminRole:
+          newAdmin.adminRole,
+        permissions:
+          newAdmin.adminPermissions,
       },
     });
   } catch (error) {
@@ -269,9 +666,19 @@ async function createAdmin(req, res, next) {
 }
 
 /**
+ * ============================================================
+ * USER MANAGEMENT
+ * ============================================================
+ */
+
+/**
  * List registered customers and drivers.
  */
-async function listUsers(req, res, next) {
+async function listUsers(
+  req,
+  res,
+  next
+) {
   try {
     const {
       role,
@@ -280,16 +687,27 @@ async function listUsers(req, res, next) {
       search = '',
     } = req.query;
 
-    const safePage = Math.max(Number(page) || 1, 1);
+    const safePage =
+      Math.max(
+        Number(page) || 1,
+        1
+      );
 
-    const safeLimit = Math.min(
-      Math.max(Number(limit) || 50, 1),
-      100
-    );
+    const safeLimit =
+      Math.min(
+        Math.max(
+          Number(limit) || 50,
+          1
+        ),
+        100
+      );
 
     const filter = {
       role: {
-        $in: ['customer', 'driver'],
+        $in: [
+          'customer',
+          'driver',
+        ],
       },
     };
 
@@ -300,23 +718,29 @@ async function listUsers(req, res, next) {
       filter.role = role;
     }
 
-    if (search.trim()) {
+    const cleanSearch =
+      String(search || '').trim();
+
+    if (cleanSearch) {
       filter.$or = [
         {
           fullName: {
-            $regex: search.trim(),
+            $regex:
+              cleanSearch,
             $options: 'i',
           },
         },
         {
           email: {
-            $regex: search.trim(),
+            $regex:
+              cleanSearch,
             $options: 'i',
           },
         },
         {
-          phoneNumber: {
-            $regex: search.trim(),
+          phone: {
+            $regex:
+              cleanSearch,
             $options: 'i',
           },
         },
@@ -324,23 +748,28 @@ async function listUsers(req, res, next) {
     }
 
     const skip =
-      (safePage - 1) * safeLimit;
+      (safePage - 1) *
+      safeLimit;
 
-    const [users, total] =
-      await Promise.all([
-        User.find(filter)
-          .select(
-            '-password -passwordResetTokenHash'
-          )
-          .sort({
-            createdAt: -1,
-          })
-          .skip(skip)
-          .limit(safeLimit)
-          .lean(),
+    const [
+      users,
+      total,
+    ] = await Promise.all([
+      User.find(filter)
+        .select(
+          '-password -passwordResetTokenHash -passwordResetExpiresAt'
+        )
+        .sort({
+          createdAt: -1,
+        })
+        .skip(skip)
+        .limit(safeLimit)
+        .lean(),
 
-        User.countDocuments(filter),
-      ]);
+      User.countDocuments(
+        filter
+      ),
+    ]);
 
     return res.status(200).json({
       success: true,
@@ -352,9 +781,12 @@ async function listUsers(req, res, next) {
           page: safePage,
           limit: safeLimit,
           total,
-          pages: Math.ceil(
-            total / safeLimit
-          ),
+
+          pages:
+            Math.ceil(
+              total /
+                safeLimit
+            ),
         },
       },
     });
@@ -364,13 +796,27 @@ async function listUsers(req, res, next) {
 }
 
 /**
- * Suspend an account.
+ * ============================================================
+ * ACCOUNT MODERATION
+ * ============================================================
  */
-async function suspendUser(req, res, next) {
+
+/**
+ * Suspend a customer or driver account.
+ */
+async function suspendUser(
+  req,
+  res,
+  next
+) {
   try {
-    const { userId } = req.params;
+    const { userId } =
+      req.params;
+
     const reason =
-      String(req.body.reason || '').trim();
+      String(
+        req.body?.reason || ''
+      ).trim();
 
     if (!reason) {
       return res.status(400).json({
@@ -380,12 +826,16 @@ async function suspendUser(req, res, next) {
       });
     }
 
-    const user = await User.findById(userId);
+    const user =
+      await User.findById(
+        userId
+      );
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User account not found.',
+        message:
+          'User account not found.',
       });
     }
 
@@ -399,9 +849,15 @@ async function suspendUser(req, res, next) {
 
     user.isSuspended = true;
     user.isActive = false;
-    user.suspensionReason = reason;
-    user.suspendedAt = new Date();
-    user.suspendedBy = req.admin.email;
+
+    user.suspensionReason =
+      reason;
+
+    user.suspendedAt =
+      new Date();
+
+    user.suspendedBy =
+      req.admin.email;
 
     await user.save();
 
@@ -418,16 +874,25 @@ async function suspendUser(req, res, next) {
 /**
  * Reactivate a suspended account.
  */
-async function reactivateUser(req, res, next) {
+async function reactivateUser(
+  req,
+  res,
+  next
+) {
   try {
-    const { userId } = req.params;
+    const { userId } =
+      req.params;
 
-    const user = await User.findById(userId);
+    const user =
+      await User.findById(
+        userId
+      );
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User account not found.',
+        message:
+          'User account not found.',
       });
     }
 
@@ -441,7 +906,10 @@ async function reactivateUser(req, res, next) {
 
     user.isSuspended = false;
     user.isActive = true;
-    user.suspensionReason = null;
+
+    user.suspensionReason =
+      null;
+
     user.suspendedAt = null;
     user.suspendedBy = null;
 
@@ -460,16 +928,25 @@ async function reactivateUser(req, res, next) {
 /**
  * Deactivate an account.
  */
-async function deactivateUser(req, res, next) {
+async function deactivateUser(
+  req,
+  res,
+  next
+) {
   try {
-    const { userId } = req.params;
+    const { userId } =
+      req.params;
 
-    const user = await User.findById(userId);
+    const user =
+      await User.findById(
+        userId
+      );
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User account not found.',
+        message:
+          'User account not found.',
       });
     }
 
@@ -496,21 +973,32 @@ async function deactivateUser(req, res, next) {
 }
 
 /**
- * List administrators.
+ * ============================================================
+ * ADMIN MANAGEMENT
+ * ============================================================
  */
-async function listAdmins(req, res, next) {
+
+/**
+ * List all administrators.
+ */
+async function listAdmins(
+  req,
+  res,
+  next
+) {
   try {
-    const admins = await User.find({
-      isAdmin: true,
-    })
-      .select(
-        '-password -passwordResetTokenHash'
-      )
-      .sort({
-        adminRole: 1,
-        createdAt: -1,
+    const admins =
+      await User.find({
+        isAdmin: true,
       })
-      .lean();
+        .select(
+          '-password -passwordResetTokenHash -passwordResetExpiresAt'
+        )
+        .sort({
+          adminRole: 1,
+          createdAt: -1,
+        })
+        .lean();
 
     return res.status(200).json({
       success: true,
@@ -522,15 +1010,23 @@ async function listAdmins(req, res, next) {
 }
 
 /**
- * Disable a Junior/Senior Admin.
+ * Disable a Senior or Junior Admin.
  *
  * Founder Admin only.
  */
-async function disableAdmin(req, res, next) {
+async function disableAdmin(
+  req,
+  res,
+  next
+) {
   try {
-    const { adminId } = req.params;
+    const { adminId } =
+      req.params;
 
-    const admin = await User.findById(adminId);
+    const admin =
+      await User.findById(
+        adminId
+      );
 
     if (!admin) {
       return res.status(404).json({
@@ -540,7 +1036,10 @@ async function disableAdmin(req, res, next) {
       });
     }
 
-    if (admin.adminRole === ADMIN_ROLES.FOUNDER) {
+    if (
+      admin.adminRole ===
+      ADMIN_ROLES.FOUNDER
+    ) {
       return res.status(403).json({
         success: false,
         message:
@@ -562,14 +1061,30 @@ async function disableAdmin(req, res, next) {
   }
 }
 
+/**
+ * ============================================================
+ * EXPORTS
+ * ============================================================
+ */
+
 module.exports = {
   bootstrapFounderAdmins,
+
   requestFounderPasswordSetup,
+
+  setAdminPassword,
+
   createAdmin,
+
   listUsers,
+
   suspendUser,
+
   reactivateUser,
+
   deactivateUser,
+
   listAdmins,
+
   disableAdmin,
 };
