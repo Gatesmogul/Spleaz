@@ -9,7 +9,7 @@ const connectDB = async () => {
   mongoose.connection.on('disconnected', () => console.warn('[MongoDB] Disconnected.'));
   mongoose.connection.on('error', (err) => console.error('[MongoDB] Error:', err.message));
   const conn = await mongoose.connect(mongoURI, {
-    autoIndex: process.env.NODE_ENV !== 'production',
+    autoIndex: process.env.NODE_ENV?.toLowerCase() !== 'production',
     serverSelectionTimeoutMS: 10000,
     socketTimeoutMS: 45000,
   });
