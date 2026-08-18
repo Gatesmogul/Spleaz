@@ -1,0 +1,80 @@
+const bcrypt = require('bcryptjs');
+
+async function setAdminPassword(req, res, next) {
+  try {
+    const {
+      token,
+      newPassword,
+    } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password setup token and new password are required.',
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must contain at least 8 characters.',
+      });
+    }
+
+    const tokenHash = hashToken(token);
+
+    const admin = await User.findOne({
+      isAdmin: true,
+      passwordResetTokenHash: tokenHash,
+      passwordResetExpiresAt: {
+        $gt: new Date(),
+      },
+    });
+
+    if (!admin) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'This password setup link is invalid or has expired.',
+      });
+    }
+
+    const hashedPassword =
+      await bcrypt.hash(newPassword, 12);
+
+    admin.password = hashedPassword;
+
+    admin.mustSetPassword = false;
+
+    admin.passwordResetTokenHash = null;
+
+    admin.passwordResetExpiresAt = null;
+
+    admin.passwordChangedAt = new Date();
+
+    await admin.save();
+
+    return res.status(200).json({
+      success: true,
+      message:
+        'Administrator password created successfully. You can now sign in.',
+    });
+  } catch (error) {
+    next(error);
+  }
+
+module.exports = {
+  bootstrapFounderAdmins,
+  requestFounderPasswordSetup,
+  setAdminPassword,
+  createAdmin,
+  listUsers,
+  suspendUser,
+  reactivateUser,
+  deactivateUser,
+  listAdmins,
+  disableAdmin,
+};
+}
