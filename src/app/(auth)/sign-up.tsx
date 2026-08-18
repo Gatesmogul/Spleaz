@@ -27,9 +27,17 @@ export default function SignUpScreen() {
 
   const placeholderColor = isDark ? '#9CA3AF' : '#6B7280';
 
+  // ==========================================
+  // PERSONAL INFORMATION
+  // ==========================================
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
+
+  // ==========================================
+  // LOCATION
+  // ==========================================
 
   const [countryOfResidence, setCountryOfResidence] =
     useState('Nigeria');
@@ -37,26 +45,69 @@ export default function SignUpScreen() {
   const [stateOfResidence, setStateOfResidence] =
     useState('Lagos');
 
-  const [cityOfResidence, setCityOfResidence] = useState('');
+  const [cityOfResidence, setCityOfResidence] =
+    useState('');
+
+  // ==========================================
+  // ACCOUNT INFORMATION
+  // ==========================================
 
   const [email, setEmail] = useState('');
   const [gender, setGender] = useState<Gender>('Male');
   const [password, setPassword] = useState('');
+
+  // ONLY CUSTOMER OR DRIVER
   const [role, setRole] = useState<Role>('Customer');
+
+  // ==========================================
+  // DRIVER / VEHICLE INFORMATION
+  // These are required ONLY when Driver is selected.
+  // ==========================================
+
+  const [vehicle, setVehicle] = useState('');
+  const [carColor, setCarColor] = useState('');
+  const [licensePlate, setLicensePlate] = useState('');
 
   const selectedCountryCode = '+234';
 
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] =
+    useState(false);
+
+  const [isLoading, setIsLoading] =
+    useState(false);
+
+  // ==========================================
+  // PASSWORD VALIDATION
+  // ==========================================
 
   const validatePassword = (value: string) =>
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(
       value
     );
 
+  // ==========================================
+  // ROLE SELECTION
+  // ==========================================
+
+  const handleRoleChange = (newRole: Role): void => {
+    setRole(newRole);
+
+    // Clear driver information when switching
+    // back to Customer.
+    if (newRole === 'Customer') {
+      setVehicle('');
+      setCarColor('');
+      setLicensePlate('');
+    }
+  };
+
+  // ==========================================
+  // SIGN UP
+  // ==========================================
+
   const handleSignUp = async (): Promise<void> => {
     // ==========================================
-    // VALIDATION
+    // BASIC VALIDATION
     // ==========================================
 
     if (
@@ -78,7 +129,33 @@ export default function SignUpScreen() {
       return;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    // ==========================================
+    // DRIVER VALIDATION
+    // ==========================================
+
+    if (role === 'Driver') {
+      if (
+        !vehicle.trim() ||
+        !carColor.trim() ||
+        !licensePlate.trim()
+      ) {
+        Alert.alert(
+          t('common.error', 'Error'),
+          'Vehicle, car colour and license plate are required when registering as a Driver.'
+        );
+        return;
+      }
+    }
+
+    // ==========================================
+    // EMAIL VALIDATION
+    // ==========================================
+
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        email.trim()
+      )
+    ) {
       Alert.alert(
         t('common.error', 'Error'),
         t(
@@ -89,9 +166,32 @@ export default function SignUpScreen() {
       return;
     }
 
+    // ==========================================
+    // PHONE VALIDATION
+    // ==========================================
+
+    const cleanedPhone = phone
+      .trim()
+      .replace(/\s+/g, '');
+
+    if (!/^\d{7,15}$/.test(cleanedPhone)) {
+      Alert.alert(
+        t('common.error', 'Error'),
+        'Please enter a valid phone number.'
+      );
+      return;
+    }
+
+    // ==========================================
+    // PASSWORD VALIDATION
+    // ==========================================
+
     if (!validatePassword(password)) {
       Alert.alert(
-        t('auth.weakPasswordTitle', 'Password Too Weak'),
+        t(
+          'auth.weakPasswordTitle',
+          'Password Too Weak'
+        ),
         t(
           'auth.weakPasswordMsg',
           'Password must contain at least 8 characters, including uppercase, lowercase, number and special character.'
@@ -104,25 +204,62 @@ export default function SignUpScreen() {
 
     try {
       // ==========================================
-      // NORMALIZE ROLE TO MATCH BACKEND
+      // NORMALIZE ROLE
       // ==========================================
       //
-      // Frontend:
-      //   Customer
-      //   Driver
+      // Public signup roles:
       //
-      // Backend expects:
-      //   customer
-      //   driver
+      // Customer -> customer
+      // Driver   -> driver
       //
+      // ADMIN IS NOT AVAILABLE FROM THIS SCREEN.
+      // ==========================================
+
       const backendRole =
-        role === 'Driver' ? 'driver' : 'customer';
+        role === 'Driver'
+          ? 'driver'
+          : 'customer';
 
-      const fullName = `${firstName.trim()} ${lastName.trim()}`;
+      // ==========================================
+      // FULL NAME
+      // ==========================================
 
-      const normalizedPhone = `${selectedCountryCode} ${phone
-        .trim()
-        .replace(/\s+/g, '')}`;
+      const fullName =
+        `${firstName.trim()} ${lastName.trim()}`;
+
+      // ==========================================
+      // PHONE
+      // ==========================================
+
+      const normalizedPhone =
+        `${selectedCountryCode} ${cleanedPhone}`;
+
+      // ==========================================
+      // DRIVER VEHICLE DATA
+      // ==========================================
+      //
+      // Only send vehicle information for drivers.
+      //
+      // Example:
+      //
+      // vehicle: {
+      //   type: "Toyota Corolla",
+      //   color: "Black",
+      //   licensePlate: "ABC-123XY"
+      // }
+      //
+      // Customers receive no vehicle object.
+      // ==========================================
+
+      const vehicleData =
+        role === 'Driver'
+          ? {
+              type: vehicle.trim(),
+              color: carColor.trim(),
+              licensePlate:
+                licensePlate.trim().toUpperCase(),
+            }
+          : undefined;
 
       // ==========================================
       // REGISTRATION REQUEST
@@ -134,22 +271,24 @@ export default function SignUpScreen() {
         phoneNumber: normalizedPhone,
         password,
 
-        // FIXED:
-        // Previously:
-        // role: role === 'Driver' ? 'DRIVER' : 'RIDER'
-        //
-        // Now:
-        // customer / driver
+        // ONLY customer OR driver.
         role: backendRole,
 
-        country: countryOfResidence.trim(),
-        state: stateOfResidence.trim(),
-        city: cityOfResidence.trim(),
+        country:
+          countryOfResidence.trim(),
 
-        // The backend currently does not require gender,
-        // but it can be sent if your authApi/backend types
-        // support this field.
+        state:
+          stateOfResidence.trim(),
+
+        city:
+          cityOfResidence.trim(),
+
         gender,
+
+        // Driver vehicle information.
+        //
+        // This is undefined for customers.
+        vehicle: vehicleData,
       });
 
       console.log(
@@ -157,17 +296,25 @@ export default function SignUpScreen() {
         response?.data
       );
 
+      // ==========================================
+      // SUCCESS
+      // ==========================================
+
       Alert.alert(
-        t('auth.accountCreatedTitle', 'Account Created'),
         t(
-          'auth.accountCreatedMsg',
-          'Your Spleaz account has been created successfully. You can now sign in.'
+          'auth.accountCreatedTitle',
+          'Account Created'
         ),
+        role === 'Driver'
+          ? 'Your Driver account has been created successfully. You can now sign in.'
+          : 'Your Customer account has been created successfully. You can now sign in.',
         [
           {
             text: t('common.ok', 'OK'),
             onPress: () =>
-              router.replace('/(auth)/sign-in'),
+              router.replace(
+                '/(auth)/sign-in'
+              ),
           },
         ]
       );
@@ -212,7 +359,8 @@ export default function SignUpScreen() {
         contentContainerStyle={[
           styles.scrollContainer,
           {
-            backgroundColor: colors.background,
+            backgroundColor:
+              colors.background,
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -239,6 +387,17 @@ export default function SignUpScreen() {
           >
             Sign Up With Spleaz
           </Text>
+
+          <Text
+            style={[
+              styles.subtitle,
+              {
+                color: colors.textMuted,
+              },
+            ]}
+          >
+            Create your Spleaz account
+          </Text>
         </View>
 
         {/* ==================================
@@ -256,24 +415,31 @@ export default function SignUpScreen() {
               ]}
             >
               First Name{' '}
-              <Text style={styles.required}>*</Text>
+              <Text style={styles.required}>
+                *
+              </Text>
             </Text>
 
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: colors.surface,
+                  backgroundColor:
+                    colors.surface,
                   color: colors.text,
-                  borderColor: colors.border,
+                  borderColor:
+                    colors.border,
                 },
               ]}
               placeholder="First Name"
-              placeholderTextColor={placeholderColor}
+              placeholderTextColor={
+                placeholderColor
+              }
               value={firstName}
               onChangeText={setFirstName}
               autoCapitalize="words"
               autoCorrect={false}
+              editable={!isLoading}
             />
           </View>
 
@@ -287,24 +453,31 @@ export default function SignUpScreen() {
               ]}
             >
               Last Name{' '}
-              <Text style={styles.required}>*</Text>
+              <Text style={styles.required}>
+                *
+              </Text>
             </Text>
 
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: colors.surface,
+                  backgroundColor:
+                    colors.surface,
                   color: colors.text,
-                  borderColor: colors.border,
+                  borderColor:
+                    colors.border,
                 },
               ]}
               placeholder="Last Name"
-              placeholderTextColor={placeholderColor}
+              placeholderTextColor={
+                placeholderColor
+              }
               value={lastName}
               onChangeText={setLastName}
               autoCapitalize="words"
               autoCorrect={false}
+              editable={!isLoading}
             />
           </View>
         </View>
@@ -322,7 +495,9 @@ export default function SignUpScreen() {
           ]}
         >
           Phone Number{' '}
-          <Text style={styles.required}>*</Text>
+          <Text style={styles.required}>
+            *
+          </Text>
         </Text>
 
         <View style={styles.phoneRow}>
@@ -330,8 +505,10 @@ export default function SignUpScreen() {
             style={[
               styles.countryCodePicker,
               {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
+                backgroundColor:
+                  colors.surface,
+                borderColor:
+                  colors.border,
               },
             ]}
           >
@@ -351,17 +528,22 @@ export default function SignUpScreen() {
             style={[
               styles.phoneInput,
               {
-                backgroundColor: colors.surface,
+                backgroundColor:
+                  colors.surface,
                 color: colors.text,
-                borderColor: colors.border,
+                borderColor:
+                  colors.border,
               },
             ]}
             placeholder="08012345678"
-            placeholderTextColor={placeholderColor}
+            placeholderTextColor={
+              placeholderColor
+            }
             keyboardType="phone-pad"
             value={phone}
             onChangeText={setPhone}
             autoCorrect={false}
+            editable={!isLoading}
           />
         </View>
 
@@ -380,21 +562,32 @@ export default function SignUpScreen() {
               ]}
             >
               Country{' '}
-              <Text style={styles.required}>*</Text>
+              <Text style={styles.required}>
+                *
+              </Text>
             </Text>
 
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: colors.surface,
+                  backgroundColor:
+                    colors.surface,
                   color: colors.text,
-                  borderColor: colors.border,
+                  borderColor:
+                    colors.border,
                 },
               ]}
-              value={countryOfResidence}
-              onChangeText={setCountryOfResidence}
-              placeholderTextColor={placeholderColor}
+              value={
+                countryOfResidence
+              }
+              onChangeText={
+                setCountryOfResidence
+              }
+              placeholderTextColor={
+                placeholderColor
+              }
+              editable={!isLoading}
             />
           </View>
 
@@ -408,21 +601,32 @@ export default function SignUpScreen() {
               ]}
             >
               State/Province{' '}
-              <Text style={styles.required}>*</Text>
+              <Text style={styles.required}>
+                *
+              </Text>
             </Text>
 
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: colors.surface,
+                  backgroundColor:
+                    colors.surface,
                   color: colors.text,
-                  borderColor: colors.border,
+                  borderColor:
+                    colors.border,
                 },
               ]}
-              value={stateOfResidence}
-              onChangeText={setStateOfResidence}
-              placeholderTextColor={placeholderColor}
+              value={
+                stateOfResidence
+              }
+              onChangeText={
+                setStateOfResidence
+              }
+              placeholderTextColor={
+                placeholderColor
+              }
+              editable={!isLoading}
             />
           </View>
         </View>
@@ -442,24 +646,35 @@ export default function SignUpScreen() {
               ]}
             >
               City{' '}
-              <Text style={styles.required}>*</Text>
+              <Text style={styles.required}>
+                *
+              </Text>
             </Text>
 
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: colors.surface,
+                  backgroundColor:
+                    colors.surface,
                   color: colors.text,
-                  borderColor: colors.border,
+                  borderColor:
+                    colors.border,
                 },
               ]}
               placeholder="e.g. Ikeja"
-              placeholderTextColor={placeholderColor}
-              value={cityOfResidence}
-              onChangeText={setCityOfResidence}
+              placeholderTextColor={
+                placeholderColor
+              }
+              value={
+                cityOfResidence
+              }
+              onChangeText={
+                setCityOfResidence
+              }
               autoCapitalize="words"
               autoCorrect={false}
+              editable={!isLoading}
             />
           </View>
 
@@ -473,25 +688,32 @@ export default function SignUpScreen() {
               ]}
             >
               Email Address{' '}
-              <Text style={styles.required}>*</Text>
+              <Text style={styles.required}>
+                *
+              </Text>
             </Text>
 
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: colors.surface,
+                  backgroundColor:
+                    colors.surface,
                   color: colors.text,
-                  borderColor: colors.border,
+                  borderColor:
+                    colors.border,
                 },
               ]}
               placeholder="user@example.com"
-              placeholderTextColor={placeholderColor}
+              placeholderTextColor={
+                placeholderColor
+              }
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
               value={email}
               onChangeText={setEmail}
+              editable={!isLoading}
             />
           </View>
         </View>
@@ -509,47 +731,60 @@ export default function SignUpScreen() {
           ]}
         >
           Gender{' '}
-          <Text style={styles.required}>*</Text>
+          <Text style={styles.required}>
+            *
+          </Text>
         </Text>
 
         <View style={styles.optionRow}>
-          {(['Male', 'Female', 'Other'] as const).map(
-            (item) => {
-              const selected = gender === item;
+          {(
+            [
+              'Male',
+              'Female',
+              'Other',
+            ] as const
+          ).map((item) => {
+            const selected =
+              gender === item;
 
-              return (
-                <TouchableOpacity
-                  key={item}
-                  style={[
-                    styles.chipOption,
-                    {
-                      borderColor: selected
+            return (
+              <TouchableOpacity
+                key={item}
+                style={[
+                  styles.chipOption,
+                  {
+                    borderColor:
+                      selected
                         ? colors.primary
                         : colors.border,
-                      backgroundColor: selected
+
+                    backgroundColor:
+                      selected
                         ? `${colors.primary}15`
                         : colors.surface,
-                    },
-                  ]}
-                  onPress={() => setGender(item)}
-                  activeOpacity={0.8}
+                  },
+                ]}
+                onPress={() =>
+                  setGender(item)
+                }
+                activeOpacity={0.8}
+                disabled={isLoading}
+              >
+                <Text
+                  style={{
+                    color: selected
+                      ? colors.primary
+                      : colors.text,
+                    fontWeight: selected
+                      ? '700'
+                      : '500',
+                  }}
                 >
-                  <Text
-                    style={{
-                      color: selected
-                        ? colors.primary
-                        : colors.text,
-                      fontWeight: selected
-                        ? '700'
-                        : '500',
-                    }}
-                  >
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              );
-            }
-          )}
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* ==================================
@@ -565,45 +800,63 @@ export default function SignUpScreen() {
           ]}
         >
           Enter Password{' '}
-          <Text style={styles.required}>*</Text>
+          <Text style={styles.required}>
+            *
+          </Text>
         </Text>
 
-        <View style={styles.passwordContainer}>
+        <View
+          style={
+            styles.passwordContainer
+          }
+        >
           <TextInput
             style={[
               styles.input,
               styles.passwordInput,
               {
-                backgroundColor: colors.surface,
+                backgroundColor:
+                  colors.surface,
                 color: colors.text,
-                borderColor: colors.border,
+                borderColor:
+                  colors.border,
               },
             ]}
             placeholder="Password"
-            placeholderTextColor={placeholderColor}
-            secureTextEntry={!showPassword}
+            placeholderTextColor={
+              placeholderColor
+            }
+            secureTextEntry={
+              !showPassword
+            }
             value={password}
             onChangeText={setPassword}
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!isLoading}
           />
 
           <TouchableOpacity
             style={styles.eyeButton}
             onPress={() =>
               setShowPassword(
-                (previous) => !previous
+                (previous) =>
+                  !previous
               )
             }
             activeOpacity={0.7}
+            disabled={isLoading}
           >
             <Text
               style={{
-                color: colors.primary,
+                color:
+                  colors.primary,
                 fontWeight: '600',
               }}
             >
-              {showPassword ? 'Hide' : 'Show'}
+              {showPassword
+                ? 'Hide'
+                : 'Show'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -617,8 +870,9 @@ export default function SignUpScreen() {
             },
           ]}
         >
-          Password must contain a capital letter,
-          lowercase letter, number, and special
+          Password must contain a
+          capital letter, lowercase
+          letter, number, and special
           character.
         </Text>
 
@@ -636,66 +890,17 @@ export default function SignUpScreen() {
           ]}
         >
           Select A Role{' '}
-          <Text style={styles.required}>*</Text>
+          <Text style={styles.required}>
+            *
+          </Text>
         </Text>
 
-        <View style={styles.roleContainer}>
-          {/* DRIVER */}
-
-          <TouchableOpacity
-            style={[
-              styles.roleCard,
-              {
-                borderColor:
-                  role === 'Driver'
-                    ? colors.primary
-                    : colors.border,
-                backgroundColor:
-                  role === 'Driver'
-                    ? `${colors.primary}15`
-                    : colors.surface,
-              },
-            ]}
-            onPress={() => setRole('Driver')}
-            activeOpacity={0.8}
-          >
-            <View
-              style={[
-                styles.radioButton,
-                {
-                  borderColor:
-                    role === 'Driver'
-                      ? colors.primary
-                      : colors.border,
-                },
-              ]}
-            >
-              {role === 'Driver' && (
-                <View
-                  style={[
-                    styles.radioInner,
-                    {
-                      backgroundColor:
-                        colors.primary,
-                    },
-                  ]}
-                />
-              )}
-            </View>
-
-            <Text
-              style={[
-                styles.roleText,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              Driver
-            </Text>
-          </TouchableOpacity>
-
-          {/* CUSTOMER */}
+        <View
+          style={styles.roleContainer}
+        >
+          {/* ==================================
+              CUSTOMER
+          =================================== */}
 
           <TouchableOpacity
             style={[
@@ -705,14 +910,20 @@ export default function SignUpScreen() {
                   role === 'Customer'
                     ? colors.primary
                     : colors.border,
+
                 backgroundColor:
                   role === 'Customer'
                     ? `${colors.primary}15`
                     : colors.surface,
               },
             ]}
-            onPress={() => setRole('Customer')}
+            onPress={() =>
+              handleRoleChange(
+                'Customer'
+              )
+            }
             activeOpacity={0.8}
+            disabled={isLoading}
           >
             <View
               style={[
@@ -742,14 +953,265 @@ export default function SignUpScreen() {
               style={[
                 styles.roleText,
                 {
-                  color: colors.text,
+                  color:
+                    colors.text,
                 },
               ]}
             >
               Customer
             </Text>
           </TouchableOpacity>
+
+          {/* ==================================
+              DRIVER
+          =================================== */}
+
+          <TouchableOpacity
+            style={[
+              styles.roleCard,
+              {
+                borderColor:
+                  role === 'Driver'
+                    ? colors.primary
+                    : colors.border,
+
+                backgroundColor:
+                  role === 'Driver'
+                    ? `${colors.primary}15`
+                    : colors.surface,
+              },
+            ]}
+            onPress={() =>
+              handleRoleChange(
+                'Driver'
+              )
+            }
+            activeOpacity={0.8}
+            disabled={isLoading}
+          >
+            <View
+              style={[
+                styles.radioButton,
+                {
+                  borderColor:
+                    role === 'Driver'
+                      ? colors.primary
+                      : colors.border,
+                },
+              ]}
+            >
+              {role === 'Driver' && (
+                <View
+                  style={[
+                    styles.radioInner,
+                    {
+                      backgroundColor:
+                        colors.primary,
+                    },
+                  ]}
+                />
+              )}
+            </View>
+
+            <Text
+              style={[
+                styles.roleText,
+                {
+                  color:
+                    colors.text,
+                },
+              ]}
+            >
+              Driver
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        {/* ==================================
+            DRIVER VEHICLE INFORMATION
+            ONLY SHOWN FOR DRIVER
+        =================================== */}
+
+        {role === 'Driver' && (
+          <View
+            style={[
+              styles.driverSection,
+              {
+                backgroundColor:
+                  colors.surface,
+                borderColor:
+                  colors.border,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.driverSectionTitle,
+                {
+                  color:
+                    colors.text,
+                },
+              ]}
+            >
+              Driver Vehicle Information
+            </Text>
+
+            <Text
+              style={[
+                styles.driverSectionSubtitle,
+                {
+                  color:
+                    colors.textMuted,
+                },
+              ]}
+            >
+              Please provide your vehicle
+              details to register as a
+              Spleaz Driver.
+            </Text>
+
+            {/* VEHICLE */}
+
+            <Text
+              style={[
+                styles.label,
+                {
+                  color:
+                    colors.text,
+                },
+              ]}
+            >
+              Vehicle{' '}
+              <Text
+                style={styles.required}
+              >
+                *
+              </Text>
+            </Text>
+
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor:
+                    colors.background,
+                  color: colors.text,
+                  borderColor:
+                    colors.border,
+                },
+              ]}
+              placeholder="e.g. Toyota Corolla"
+              placeholderTextColor={
+                placeholderColor
+              }
+              value={vehicle}
+              onChangeText={setVehicle}
+              autoCapitalize="words"
+              autoCorrect={false}
+              editable={!isLoading}
+            />
+
+            {/* CAR COLOUR */}
+
+            <Text
+              style={[
+                styles.label,
+                styles.driverFieldLabel,
+                {
+                  color:
+                    colors.text,
+                },
+              ]}
+            >
+              Car Colour{' '}
+              <Text
+                style={styles.required}
+              >
+                *
+              </Text>
+            </Text>
+
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor:
+                    colors.background,
+                  color: colors.text,
+                  borderColor:
+                    colors.border,
+                },
+              ]}
+              placeholder="e.g. Black"
+              placeholderTextColor={
+                placeholderColor
+              }
+              value={carColor}
+              onChangeText={setCarColor}
+              autoCapitalize="words"
+              autoCorrect={false}
+              editable={!isLoading}
+            />
+
+            {/* LICENSE PLATE */}
+
+            <Text
+              style={[
+                styles.label,
+                styles.driverFieldLabel,
+                {
+                  color:
+                    colors.text,
+                },
+              ]}
+            >
+              License Plate{' '}
+              <Text
+                style={styles.required}
+              >
+                *
+              </Text>
+            </Text>
+
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor:
+                    colors.background,
+                  color: colors.text,
+                  borderColor:
+                    colors.border,
+                },
+              ]}
+              placeholder="e.g. ABC-123XY"
+              placeholderTextColor={
+                placeholderColor
+              }
+              value={licensePlate}
+              onChangeText={
+                setLicensePlate
+              }
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!isLoading}
+            />
+
+            <Text
+              style={[
+                styles.vehicleHint,
+                {
+                  color:
+                    colors.textMuted,
+                },
+              ]}
+            >
+              All vehicle information is
+              required for Driver
+              registration.
+            </Text>
+          </View>
+        )}
 
         {/* ==================================
             SIGN UP BUTTON
@@ -759,8 +1221,11 @@ export default function SignUpScreen() {
           style={[
             styles.submitButton,
             {
-              backgroundColor: colors.primary,
-              opacity: isLoading ? 0.7 : 1,
+              backgroundColor:
+                colors.primary,
+              opacity: isLoading
+                ? 0.7
+                : 1,
             },
           ]}
           onPress={handleSignUp}
@@ -768,9 +1233,15 @@ export default function SignUpScreen() {
           activeOpacity={0.8}
         >
           {isLoading ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator
+              color="#FFFFFF"
+            />
           ) : (
-            <Text style={styles.submitButtonText}>
+            <Text
+              style={
+                styles.submitButtonText
+              }
+            >
               Sign Up
             </Text>
           )}
@@ -783,20 +1254,25 @@ export default function SignUpScreen() {
         <TouchableOpacity
           style={styles.loginRedirect}
           onPress={() => {
-            router.push('/(auth)/sign-in');
+            router.push(
+              '/(auth)/sign-in'
+            );
           }}
           activeOpacity={0.7}
+          disabled={isLoading}
         >
           <Text
             style={{
-              color: placeholderColor,
+              color:
+                placeholderColor,
             }}
           >
             Already have an account?{' '}
 
             <Text
               style={{
-                color: colors.primary,
+                color:
+                  colors.primary,
                 fontWeight: '700',
               }}
             >
@@ -839,6 +1315,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.5,
+  },
+
+  subtitle: {
+    fontSize: 13,
+    marginTop: 5,
+    textAlign: 'center',
   },
 
   row: {
@@ -971,6 +1453,39 @@ const styles = StyleSheet.create({
   roleText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+
+  // ==========================================
+  // DRIVER SECTION
+  // ==========================================
+
+  driverSection: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 24,
+  },
+
+  driverSectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+
+  driverSectionSubtitle: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 16,
+  },
+
+  driverFieldLabel: {
+    marginTop: 14,
+  },
+
+  vehicleHint: {
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 6,
   },
 
   submitButton: {
