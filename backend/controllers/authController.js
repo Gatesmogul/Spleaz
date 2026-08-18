@@ -22,8 +22,23 @@ const publicUser = (user) => {
   };
 };
 
-const normalizeRole = (role) => ({ RIDER:'customer', DRIVER:'driver', ADMIN:'admin' }[String(role).toUpperCase()] || String(role || 'customer').toLowerCase());
+const normalizeRole = (role) => {
+  const normalized = String(role || 'customer').trim().toLowerCase();
 
+  if (normalized === 'customer' || normalized === 'customers') {
+    return 'customer';
+  }
+
+  if (normalized === 'driver' || normalized === 'drivers') {
+    return 'driver';
+  }
+
+  if (normalized === 'admin' || normalized === 'admins') {
+    return 'admin';
+  }
+
+  return normalized;
+};
 const register = async (req, res, next) => {
   try {
     const {
