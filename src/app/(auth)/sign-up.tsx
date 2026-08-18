@@ -3,30 +3,197 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
-type Gender='Male'|'Female'|'Other';
-type Role='Customer'|'Driver';
+type Gender = 'Male' | 'Female' | 'Other';
+type Role = 'Customer' | 'Driver';
 
-export default function SignUpScreen(){
- const router=useRouter(); const {t}=useTranslation(); const {colors,isDark}=useTheme();
- const placeholderColor=isDark?'#9CA3AF':'#6B7280';
- const [firstName,setFirstName]=useState(''); const [lastName,setLastName]=useState(''); const [phone,setPhone]=useState('');
- const [countryOfResidence,setCountryOfResidence]=useState('Nigeria'); const [stateOfResidence,setStateOfResidence]=useState('Lagos'); const [cityOfResidence,setCityOfResidence]=useState('');
- const [email,setEmail]=useState(''); const [gender,setGender]=useState<Gender>('Male'); const [password,setPassword]=useState(''); const [role,setRole]=useState<Role>('Customer');
- const selectedCountryCode='+234'; const [showPassword,setShowPassword]=useState(false); const [isLoading,setIsLoading]=useState(false);
- const validatePassword=(value:string)=>/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(value);
- const handleSignUp=async():Promise<void>=>{
-  if(!firstName.trim()||!lastName.trim()||!phone.trim()||!email.trim()||!cityOfResidence.trim()||!stateOfResidence.trim()||!password){Alert.alert(t('common.error','Error'),t('auth.fillAllFields','Please fill in all required fields.'));return;}
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())){Alert.alert(t('common.error','Error'),t('auth.invalidEmail','Please enter a valid email address.'));return;}
-  if(!validatePassword(password)){Alert.alert(t('auth.weakPasswordTitle','Password Too Weak'),t('auth.weakPasswordMsg','Password must contain at least 8 characters, including uppercase, lowercase, number and special character.'));return;}
-  setIsLoading(true);
-  try{
-   const response=await authApi.signUp({fullName:`${firstName.trim()} ${lastName.trim()}`,email:email.trim().toLowerCase(),phoneNumber:`${selectedCountryCode} ${phone.trim()}`,password,role:role==='Driver'?'DRIVER':'RIDER',country:countryOfResidence,state:stateOfResidence,city:cityOfResidence.trim()});
-   Alert.alert(t('auth.accountCreatedTitle','Account Created'),t('auth.accountCreatedMsg','Your Spleaz account has been created successfully. You can now sign in.'),[{text:t('common.ok','OK'),onPress:()=>router.replace('/(auth)/sign-in')}]);
-  }catch(error:any){console.error('Spleaz sign-up error:',error);Alert.alert(t('common.error','Error'),error?.response?.data?.message||'Registration failed. Please try again.');}
-  finally{setIsLoading(false);}
- };
+export default function SignUpScreen() {
+  const router = useRouter();
+  const { t } = useTranslation();
+  const { colors, isDark } = useTheme();
+
+  const placeholderColor = isDark ? '#9CA3AF' : '#6B7280';
+
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+
+  const [countryOfResidence, setCountryOfResidence] =
+    useState('Nigeria');
+
+  const [stateOfResidence, setStateOfResidence] =
+    useState('Lagos');
+
+  const [cityOfResidence, setCityOfResidence] = useState('');
+
+  const [email, setEmail] = useState('');
+  const [gender, setGender] = useState<Gender>('Male');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState<Role>('Customer');
+
+  const selectedCountryCode = '+234';
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const validatePassword = (value: string) =>
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(
+      value
+    );
+
+  const handleSignUp = async (): Promise<void> => {
+    // ==========================================
+    // VALIDATION
+    // ==========================================
+
+    if (
+      !firstName.trim() ||
+      !lastName.trim() ||
+      !phone.trim() ||
+      !email.trim() ||
+      !cityOfResidence.trim() ||
+      !stateOfResidence.trim() ||
+      !password
+    ) {
+      Alert.alert(
+        t('common.error', 'Error'),
+        t(
+          'auth.fillAllFields',
+          'Please fill in all required fields.'
+        )
+      );
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert(
+        t('common.error', 'Error'),
+        t(
+          'auth.invalidEmail',
+          'Please enter a valid email address.'
+        )
+      );
+      return;
+    }
+
+    if (!validatePassword(password)) {
+      Alert.alert(
+        t('auth.weakPasswordTitle', 'Password Too Weak'),
+        t(
+          'auth.weakPasswordMsg',
+          'Password must contain at least 8 characters, including uppercase, lowercase, number and special character.'
+        )
+      );
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // ==========================================
+      // NORMALIZE ROLE TO MATCH BACKEND
+      // ==========================================
+      //
+      // Frontend:
+      //   Customer
+      //   Driver
+      //
+      // Backend expects:
+      //   customer
+      //   driver
+      //
+      const backendRole =
+        role === 'Driver' ? 'driver' : 'customer';
+
+      const fullName = `${firstName.trim()} ${lastName.trim()}`;
+
+      const normalizedPhone = `${selectedCountryCode} ${phone
+        .trim()
+        .replace(/\s+/g, '')}`;
+
+      // ==========================================
+      // REGISTRATION REQUEST
+      // ==========================================
+
+      const response = await authApi.signUp({
+        fullName,
+        email: email.trim().toLowerCase(),
+        phoneNumber: normalizedPhone,
+        password,
+
+        // FIXED:
+        // Previously:
+        // role: role === 'Driver' ? 'DRIVER' : 'RIDER'
+        //
+        // Now:
+        // customer / driver
+        role: backendRole,
+
+        country: countryOfResidence.trim(),
+        state: stateOfResidence.trim(),
+        city: cityOfResidence.trim(),
+
+        // The backend currently does not require gender,
+        // but it can be sent if your authApi/backend types
+        // support this field.
+        gender,
+      });
+
+      console.log(
+        '[Spleaz] Registration successful:',
+        response?.data
+      );
+
+      Alert.alert(
+        t('auth.accountCreatedTitle', 'Account Created'),
+        t(
+          'auth.accountCreatedMsg',
+          'Your Spleaz account has been created successfully. You can now sign in.'
+        ),
+        [
+          {
+            text: t('common.ok', 'OK'),
+            onPress: () =>
+              router.replace('/(auth)/sign-in'),
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error(
+        '[Spleaz] Sign-up error:',
+        error
+      );
+
+      console.error(
+        '[Spleaz] Sign-up response:',
+        error?.response?.data
+      );
+
+      const serverMessage =
+        error?.response?.data?.message;
+
+      Alert.alert(
+        t('common.error', 'Error'),
+        serverMessage ||
+          'Registration failed. Please try again.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // ==========================================
   // RENDER
@@ -57,15 +224,6 @@ export default function SignUpScreen(){
 
         <View style={styles.logoContainer}>
           <Image
-            /*
-             * sign-up.tsx is located at:
-             * src/app/(auth)/sign-up.tsx
-             *
-             * assets is located at:
-             * assets/Spleaz_App_Logo.png
-             *
-             * Therefore we need ../../../
-             */
             source={require('../../../assets/Spleaz_App_Logo.png')}
             style={styles.logo}
             resizeMode="contain"
@@ -451,14 +609,14 @@ export default function SignUpScreen(){
         </View>
 
         <Text
-  style={[
-    styles.hintText,
-    {
-      color: colors.text,
-      opacity: 0.7,
-    },
-  ]}
->
+          style={[
+            styles.hintText,
+            {
+              color: colors.text,
+              opacity: 0.7,
+            },
+          ]}
+        >
           Password must contain a capital letter,
           lowercase letter, number, and special
           character.
