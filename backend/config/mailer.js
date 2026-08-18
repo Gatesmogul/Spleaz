@@ -50,7 +50,7 @@ const sendRideReceiptEmail = async ({
   mapStaticUrl,
 }) => {
   const fromName = process.env.FROM_NAME || 'Spleaz Rides';
-  const fromEmail = process.env.FROM_EMAIL || 'no-reply@spleaz.com';
+  const fromEmail = process.env.FROM_EMAIL || 'no-reply@Spleaz-app.onrender.com';
 
   const htmlContent = `
     <!DOCTYPE html>
