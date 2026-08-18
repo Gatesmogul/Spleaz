@@ -20,24 +20,45 @@ import {
 type Gender = 'Male' | 'Female' | 'Other';
 type Role = 'Customer' | 'Driver';
 
+type VehicleData = {
+  type: string;
+  color: string;
+  licensePlate: string;
+};
+
+type SignUpPayload = {
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+  password: string;
+  role: 'customer' | 'driver';
+  country: string;
+  state: string;
+  city: string;
+  gender: Gender;
+  vehicle?: VehicleData;
+};
+
 export default function SignUpScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
 
-  const placeholderColor = isDark ? '#9CA3AF' : '#6B7280';
+  const placeholderColor = isDark
+    ? '#9CA3AF'
+    : '#6B7280';
 
-  // ==========================================
+  // =========================================================
   // PERSONAL INFORMATION
-  // ==========================================
+  // =========================================================
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
 
-  // ==========================================
+  // =========================================================
   // LOCATION
-  // ==========================================
+  // =========================================================
 
   const [countryOfResidence, setCountryOfResidence] =
     useState('Nigeria');
@@ -48,27 +69,35 @@ export default function SignUpScreen() {
   const [cityOfResidence, setCityOfResidence] =
     useState('');
 
-  // ==========================================
+  // =========================================================
   // ACCOUNT INFORMATION
-  // ==========================================
+  // =========================================================
 
   const [email, setEmail] = useState('');
-  const [gender, setGender] = useState<Gender>('Male');
+  const [gender, setGender] =
+    useState<Gender>('Male');
+
   const [password, setPassword] = useState('');
 
-  // ONLY CUSTOMER OR DRIVER
-  const [role, setRole] = useState<Role>('Customer');
+  // =========================================================
+  // ROLE
+  // =========================================================
 
-  // ==========================================
+  const [role, setRole] =
+    useState<Role>('Customer');
+
+  // =========================================================
   // DRIVER / VEHICLE INFORMATION
-  // These are required ONLY when Driver is selected.
-  // ==========================================
+  // =========================================================
 
   const [vehicle, setVehicle] = useState('');
   const [carColor, setCarColor] = useState('');
-  const [licensePlate, setLicensePlate] = useState('');
+  const [licensePlate, setLicensePlate] =
+    useState('');
 
-  const selectedCountryCode = '+234';
+  // =========================================================
+  // UI STATE
+  // =========================================================
 
   const [showPassword, setShowPassword] =
     useState(false);
@@ -76,20 +105,31 @@ export default function SignUpScreen() {
   const [isLoading, setIsLoading] =
     useState(false);
 
-  // ==========================================
-  // PASSWORD VALIDATION
-  // ==========================================
+  // =========================================================
+  // CONSTANTS
+  // =========================================================
 
-  const validatePassword = (value: string) =>
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(
+  const selectedCountryCode = '+234';
+
+  // =========================================================
+  // PASSWORD VALIDATION
+  // =========================================================
+
+  const validatePassword = (
+    value: string
+  ): boolean => {
+    return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(
       value
     );
+  };
 
-  // ==========================================
-  // ROLE SELECTION
-  // ==========================================
+  // =========================================================
+  // ROLE CHANGE
+  // =========================================================
 
-  const handleRoleChange = (newRole: Role): void => {
+  const handleRoleChange = (
+    newRole: Role
+  ): void => {
     setRole(newRole);
 
     // Clear driver information when switching
@@ -101,90 +141,149 @@ export default function SignUpScreen() {
     }
   };
 
-  // ==========================================
+  // =========================================================
+  // PHONE NORMALIZATION
+  // =========================================================
+  //
+  // Examples:
+  //
+  // 08012345678 -> +2348012345678
+  // 8012345678  -> +2348012345678
+  // +2348012345678 -> +2348012345678
+  //
+  // The backend accepts this through `phoneNumber`.
+  // =========================================================
+
+  const normalizePhoneNumber = (
+    value: string
+  ): string => {
+    let cleaned = value
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(/-/g, '')
+      .replace(/\(/g, '')
+      .replace(/\)/g, '');
+
+    if (cleaned.startsWith('+234')) {
+      return cleaned;
+    }
+
+    if (cleaned.startsWith('234')) {
+      return `+${cleaned}`;
+    }
+
+    if (cleaned.startsWith('0')) {
+      cleaned = cleaned.substring(1);
+    }
+
+    return `${selectedCountryCode}${cleaned}`;
+  };
+
+  // =========================================================
   // SIGN UP
-  // ==========================================
+  // =========================================================
 
   const handleSignUp = async (): Promise<void> => {
-    // ==========================================
+    // -------------------------------------------------------
+    // TRIMMED VALUES
+    // -------------------------------------------------------
+
+    const trimmedFirstName =
+      firstName.trim();
+
+    const trimmedLastName =
+      lastName.trim();
+
+    const trimmedEmail =
+      email.trim().toLowerCase();
+
+    const trimmedCountry =
+      countryOfResidence.trim();
+
+    const trimmedState =
+      stateOfResidence.trim();
+
+    const trimmedCity =
+      cityOfResidence.trim();
+
+    const cleanedPhone =
+      phone
+        .trim()
+        .replace(/\s+/g, '')
+        .replace(/-/g, '')
+        .replace(/\(/g, '')
+        .replace(/\)/g, '');
+
+    // -------------------------------------------------------
     // BASIC VALIDATION
-    // ==========================================
+    // -------------------------------------------------------
 
     if (
-      !firstName.trim() ||
-      !lastName.trim() ||
-      !phone.trim() ||
-      !email.trim() ||
-      !cityOfResidence.trim() ||
-      !stateOfResidence.trim() ||
+      !trimmedFirstName ||
+      !trimmedLastName ||
+      !cleanedPhone ||
+      !trimmedEmail ||
+      !trimmedCountry ||
+      !trimmedState ||
+      !trimmedCity ||
       !password
     ) {
       Alert.alert(
-        t('common.error', 'Error'),
+        t(
+          'common.error',
+          'Error'
+        ),
         t(
           'auth.fillAllFields',
           'Please fill in all required fields.'
         )
       );
+
       return;
     }
 
-    // ==========================================
-    // DRIVER VALIDATION
-    // ==========================================
-
-    if (role === 'Driver') {
-      if (
-        !vehicle.trim() ||
-        !carColor.trim() ||
-        !licensePlate.trim()
-      ) {
-        Alert.alert(
-          t('common.error', 'Error'),
-          'Vehicle, car colour and license plate are required when registering as a Driver.'
-        );
-        return;
-      }
-    }
-
-    // ==========================================
+    // -------------------------------------------------------
     // EMAIL VALIDATION
-    // ==========================================
+    // -------------------------------------------------------
 
     if (
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        email.trim()
+        trimmedEmail
       )
     ) {
       Alert.alert(
-        t('common.error', 'Error'),
+        t(
+          'common.error',
+          'Error'
+        ),
         t(
           'auth.invalidEmail',
           'Please enter a valid email address.'
         )
       );
+
       return;
     }
 
-    // ==========================================
+    // -------------------------------------------------------
     // PHONE VALIDATION
-    // ==========================================
+    // -------------------------------------------------------
 
-    const cleanedPhone = phone
-      .trim()
-      .replace(/\s+/g, '');
-
-    if (!/^\d{7,15}$/.test(cleanedPhone)) {
+    if (!/^\+?\d{7,15}$/.test(cleanedPhone)) {
       Alert.alert(
-        t('common.error', 'Error'),
+        t(
+          'common.error',
+          'Error'
+        ),
         'Please enter a valid phone number.'
       );
+
       return;
     }
 
-    // ==========================================
+    // -------------------------------------------------------
     // PASSWORD VALIDATION
-    // ==========================================
+    // -------------------------------------------------------
 
     if (!validatePassword(password)) {
       Alert.alert(
@@ -197,158 +296,293 @@ export default function SignUpScreen() {
           'Password must contain at least 8 characters, including uppercase, lowercase, number and special character.'
         )
       );
+
+      return;
+    }
+
+    // -------------------------------------------------------
+    // DRIVER VALIDATION
+    // -------------------------------------------------------
+
+    if (role === 'Driver') {
+      if (
+        !vehicle.trim() ||
+        !carColor.trim() ||
+        !licensePlate.trim()
+      ) {
+        Alert.alert(
+          t(
+            'common.error',
+            'Error'
+          ),
+          'Vehicle, car colour and license plate are required when registering as a Driver.'
+        );
+
+        return;
+      }
+    }
+
+    // -------------------------------------------------------
+    // PREVENT DOUBLE SUBMISSION
+    // -------------------------------------------------------
+
+    if (isLoading) {
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // ==========================================
-      // NORMALIZE ROLE
-      // ==========================================
-      //
-      // Public signup roles:
+      // =====================================================
+      // BACKEND ROLE
+      // =====================================================
       //
       // Customer -> customer
       // Driver   -> driver
       //
-      // ADMIN IS NOT AVAILABLE FROM THIS SCREEN.
-      // ==========================================
+      // Admin is intentionally NOT available here.
+      // =====================================================
 
-      const backendRole =
+      const backendRole:
+        | 'customer'
+        | 'driver' =
         role === 'Driver'
           ? 'driver'
           : 'customer';
 
-      // ==========================================
+      // =====================================================
       // FULL NAME
-      // ==========================================
+      // =====================================================
 
       const fullName =
-        `${firstName.trim()} ${lastName.trim()}`;
+        `${trimmedFirstName} ${trimmedLastName}`;
 
-      // ==========================================
+      // =====================================================
       // PHONE
-      // ==========================================
+      // =====================================================
 
       const normalizedPhone =
-        `${selectedCountryCode} ${cleanedPhone}`;
+        normalizePhoneNumber(phone);
 
-      // ==========================================
-      // DRIVER VEHICLE DATA
-      // ==========================================
+      // =====================================================
+      // VEHICLE DATA
+      // =====================================================
       //
-      // Only send vehicle information for drivers.
-      //
-      // Example:
+      // The backend controller expects:
       //
       // vehicle: {
-      //   type: "Toyota Corolla",
-      //   color: "Black",
-      //   licensePlate: "ABC-123XY"
+      //   type,
+      //   color,
+      //   licensePlate
       // }
       //
-      // Customers receive no vehicle object.
-      // ==========================================
+      // Customers do NOT receive a vehicle object.
+      // =====================================================
 
-      const vehicleData =
+      const vehicleData: VehicleData | undefined =
         role === 'Driver'
           ? {
               type: vehicle.trim(),
               color: carColor.trim(),
               licensePlate:
-                licensePlate.trim().toUpperCase(),
+                licensePlate
+                  .trim()
+                  .toUpperCase(),
             }
           : undefined;
 
-      // ==========================================
-      // REGISTRATION REQUEST
-      // ==========================================
+      // =====================================================
+      // REQUEST PAYLOAD
+      // =====================================================
 
-      const response = await authApi.signUp({
+      const payload: SignUpPayload = {
         fullName,
-        email: email.trim().toLowerCase(),
+        email: trimmedEmail,
         phoneNumber: normalizedPhone,
         password,
-
-        // ONLY customer OR driver.
         role: backendRole,
-
-        country:
-          countryOfResidence.trim(),
-
-        state:
-          stateOfResidence.trim(),
-
-        city:
-          cityOfResidence.trim(),
-
+        country: trimmedCountry,
+        state: trimmedState,
+        city: trimmedCity,
         gender,
-
-        // Driver vehicle information.
-        //
-        // This is undefined for customers.
-        vehicle: vehicleData,
-      });
+        ...(vehicleData
+          ? {
+              vehicle: vehicleData,
+            }
+          : {}),
+      };
 
       console.log(
-        '[Spleaz] Registration successful:',
+        '[Spleaz/Register] Sending registration request'
+      );
+
+      console.log(
+        '[Spleaz/Register] Role:',
+        payload.role
+      );
+
+      console.log(
+        '[Spleaz/Register] Email:',
+        payload.email
+      );
+
+      console.log(
+        '[Spleaz/Register] Phone:',
+        payload.phoneNumber
+      );
+
+      // =====================================================
+      // API REQUEST
+      // =====================================================
+
+      const response =
+        await authApi.signUp(payload);
+
+      console.log(
+        '[Spleaz/Register] Registration successful:',
         response?.data
       );
 
-      // ==========================================
-      // SUCCESS
-      // ==========================================
+      // =====================================================
+      // SUCCESS MESSAGE
+      // =====================================================
+
+      const successMessage =
+        role === 'Driver'
+          ? 'Your Driver account has been created successfully. You can now sign in.'
+          : 'Your Customer account has been created successfully. You can now sign in.';
 
       Alert.alert(
         t(
           'auth.accountCreatedTitle',
           'Account Created'
         ),
-        role === 'Driver'
-          ? 'Your Driver account has been created successfully. You can now sign in.'
-          : 'Your Customer account has been created successfully. You can now sign in.',
+        successMessage,
         [
           {
-            text: t('common.ok', 'OK'),
-            onPress: () =>
+            text: t(
+              'common.ok',
+              'OK'
+            ),
+            onPress: () => {
               router.replace(
                 '/(auth)/sign-in'
-              ),
+              );
+            },
           },
         ]
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(
-        '[Spleaz] Sign-up error:',
+        '[Spleaz/Register] Registration failed:',
         error
       );
 
+      // Axios-style error handling without
+      // using `any`.
+      const apiError =
+        error as {
+          response?: {
+            status?: number;
+            data?: {
+              message?: string;
+              error?: string;
+              success?: boolean;
+            };
+          };
+          message?: string;
+        };
+
       console.error(
-        '[Spleaz] Sign-up response:',
-        error?.response?.data
+        '[Spleaz/Register] Server response:',
+        apiError?.response?.data
       );
 
+      const status =
+        apiError?.response?.status;
+
       const serverMessage =
-        error?.response?.data?.message;
+        apiError?.response?.data?.message ||
+        apiError?.response?.data?.error;
+
+      // -----------------------------------------------------
+      // SPECIFIC SERVER ERRORS
+      // -----------------------------------------------------
+
+      if (status === 409) {
+        Alert.alert(
+          'Account Already Exists',
+          serverMessage ||
+            'A user with this email or phone number already exists.'
+        );
+
+        return;
+      }
+
+      if (status === 400) {
+        Alert.alert(
+          t(
+            'common.error',
+            'Error'
+          ),
+          serverMessage ||
+            'Please check your registration information and try again.'
+        );
+
+        return;
+      }
+
+      if (status === 500) {
+        Alert.alert(
+          'Server Error',
+          'The server encountered an error while creating your account. Please try again shortly.'
+        );
+
+        return;
+      }
+
+      // -----------------------------------------------------
+      // NETWORK / UNKNOWN ERROR
+      // -----------------------------------------------------
 
       Alert.alert(
-        t('common.error', 'Error'),
+        t(
+          'common.error',
+          'Error'
+        ),
         serverMessage ||
-          'Registration failed. Please try again.'
+          apiError?.message ||
+          'Registration failed. Please check your internet connection and try again.'
       );
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ==========================================
+  // =========================================================
+  // COMMON INPUT STYLE
+  // =========================================================
+
+  const inputStyle = [
+    styles.input,
+    {
+      backgroundColor:
+        colors.surface,
+      color: colors.text,
+      borderColor:
+        colors.border,
+    },
+  ];
+
+  // =========================================================
   // RENDER
-  // ==========================================
+  // =========================================================
 
   return (
     <KeyboardAvoidingView
-      style={styles.keyboardContainer}
+      style={
+        styles.keyboardContainer
+      }
       behavior={
         Platform.OS === 'ios'
           ? 'padding'
@@ -363,14 +597,18 @@ export default function SignUpScreen() {
               colors.background,
           },
         ]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={
+          false
+        }
         keyboardShouldPersistTaps="handled"
       >
-        {/* ==================================
-            LOGO
-        =================================== */}
+        {/* =================================================
+            LOGO / HEADER
+        ================================================= */}
 
-        <View style={styles.logoContainer}>
+        <View
+          style={styles.logoContainer}
+        >
           <Image
             source={require('../../../assets/Spleaz_App_Logo.png')}
             style={styles.logo}
@@ -381,7 +619,8 @@ export default function SignUpScreen() {
             style={[
               styles.title,
               {
-                color: colors.text,
+                color:
+                  colors.text,
               },
             ]}
           >
@@ -392,7 +631,8 @@ export default function SignUpScreen() {
             style={[
               styles.subtitle,
               {
-                color: colors.textMuted,
+                color:
+                  colors.textMuted,
               },
             ]}
           >
@@ -400,107 +640,110 @@ export default function SignUpScreen() {
           </Text>
         </View>
 
-        {/* ==================================
+        {/* =================================================
             FIRST NAME / LAST NAME
-        =================================== */}
+        ================================================= */}
 
         <View style={styles.row}>
-          <View style={styles.flexField}>
+          <View
+            style={styles.flexField}
+          >
             <Text
               style={[
                 styles.label,
                 {
-                  color: colors.text,
+                  color:
+                    colors.text,
                 },
               ]}
             >
               First Name{' '}
-              <Text style={styles.required}>
+              <Text
+                style={styles.required}
+              >
                 *
               </Text>
             </Text>
 
             <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor:
-                    colors.surface,
-                  color: colors.text,
-                  borderColor:
-                    colors.border,
-                },
-              ]}
+              style={inputStyle}
               placeholder="First Name"
               placeholderTextColor={
                 placeholderColor
               }
               value={firstName}
-              onChangeText={setFirstName}
+              onChangeText={
+                setFirstName
+              }
               autoCapitalize="words"
               autoCorrect={false}
               editable={!isLoading}
+              returnKeyType="next"
             />
           </View>
 
-          <View style={styles.flexField}>
+          <View
+            style={styles.flexField}
+          >
             <Text
               style={[
                 styles.label,
                 {
-                  color: colors.text,
+                  color:
+                    colors.text,
                 },
               ]}
             >
               Last Name{' '}
-              <Text style={styles.required}>
+              <Text
+                style={styles.required}
+              >
                 *
               </Text>
             </Text>
 
             <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor:
-                    colors.surface,
-                  color: colors.text,
-                  borderColor:
-                    colors.border,
-                },
-              ]}
+              style={inputStyle}
               placeholder="Last Name"
               placeholderTextColor={
                 placeholderColor
               }
               value={lastName}
-              onChangeText={setLastName}
+              onChangeText={
+                setLastName
+              }
               autoCapitalize="words"
               autoCorrect={false}
               editable={!isLoading}
+              returnKeyType="next"
             />
           </View>
         </View>
 
-        {/* ==================================
-            PHONE
-        =================================== */}
+        {/* =================================================
+            PHONE NUMBER
+        ================================================= */}
 
         <Text
           style={[
             styles.label,
             {
-              color: colors.text,
+              color:
+                colors.text,
             },
           ]}
         >
           Phone Number{' '}
-          <Text style={styles.required}>
+          <Text
+            style={styles.required}
+          >
             *
           </Text>
         </Text>
 
-        <View style={styles.phoneRow}>
+        <View
+          style={styles.phoneRow}
+        >
           <View
             style={[
               styles.countryCodePicker,
@@ -516,7 +759,8 @@ export default function SignUpScreen() {
               style={[
                 styles.countryCodeText,
                 {
-                  color: colors.text,
+                  color:
+                    colors.text,
                 },
               ]}
             >
@@ -530,7 +774,8 @@ export default function SignUpScreen() {
               {
                 backgroundColor:
                   colors.surface,
-                color: colors.text,
+                color:
+                  colors.text,
                 borderColor:
                   colors.border,
               },
@@ -544,124 +789,117 @@ export default function SignUpScreen() {
             onChangeText={setPhone}
             autoCorrect={false}
             editable={!isLoading}
+            returnKeyType="next"
           />
         </View>
 
-        {/* ==================================
+        {/* =================================================
             COUNTRY / STATE
-        =================================== */}
+        ================================================= */}
 
         <View style={styles.row}>
-          <View style={styles.flexField}>
+          <View
+            style={styles.flexField}
+          >
             <Text
               style={[
                 styles.label,
                 {
-                  color: colors.text,
+                  color:
+                    colors.text,
                 },
               ]}
             >
               Country{' '}
-              <Text style={styles.required}>
+              <Text
+                style={styles.required}
+              >
                 *
               </Text>
             </Text>
 
             <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor:
-                    colors.surface,
-                  color: colors.text,
-                  borderColor:
-                    colors.border,
-                },
-              ]}
+              style={inputStyle}
               value={
                 countryOfResidence
               }
               onChangeText={
                 setCountryOfResidence
               }
+              placeholder="Nigeria"
               placeholderTextColor={
                 placeholderColor
               }
+              autoCapitalize="words"
               editable={!isLoading}
             />
           </View>
 
-          <View style={styles.flexField}>
+          <View
+            style={styles.flexField}
+          >
             <Text
               style={[
                 styles.label,
                 {
-                  color: colors.text,
+                  color:
+                    colors.text,
                 },
               ]}
             >
               State/Province{' '}
-              <Text style={styles.required}>
+              <Text
+                style={styles.required}
+              >
                 *
               </Text>
             </Text>
 
             <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor:
-                    colors.surface,
-                  color: colors.text,
-                  borderColor:
-                    colors.border,
-                },
-              ]}
+              style={inputStyle}
               value={
                 stateOfResidence
               }
               onChangeText={
                 setStateOfResidence
               }
+              placeholder="Lagos"
               placeholderTextColor={
                 placeholderColor
               }
+              autoCapitalize="words"
               editable={!isLoading}
             />
           </View>
         </View>
 
-        {/* ==================================
+        {/* =================================================
             CITY / EMAIL
-        =================================== */}
+        ================================================= */}
 
         <View style={styles.row}>
-          <View style={styles.flexField}>
+          <View
+            style={styles.flexField}
+          >
             <Text
               style={[
                 styles.label,
                 {
-                  color: colors.text,
+                  color:
+                    colors.text,
                 },
               ]}
             >
               City{' '}
-              <Text style={styles.required}>
+              <Text
+                style={styles.required}
+              >
                 *
               </Text>
             </Text>
 
             <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor:
-                    colors.surface,
-                  color: colors.text,
-                  borderColor:
-                    colors.border,
-                },
-              ]}
+              style={inputStyle}
               placeholder="e.g. Ikeja"
               placeholderTextColor={
                 placeholderColor
@@ -675,35 +913,32 @@ export default function SignUpScreen() {
               autoCapitalize="words"
               autoCorrect={false}
               editable={!isLoading}
+              returnKeyType="next"
             />
           </View>
 
-          <View style={styles.flexField}>
+          <View
+            style={styles.flexField}
+          >
             <Text
               style={[
                 styles.label,
                 {
-                  color: colors.text,
+                  color:
+                    colors.text,
                 },
               ]}
             >
               Email Address{' '}
-              <Text style={styles.required}>
+              <Text
+                style={styles.required}
+              >
                 *
               </Text>
             </Text>
 
             <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor:
-                    colors.surface,
-                  color: colors.text,
-                  borderColor:
-                    colors.border,
-                },
-              ]}
+              style={inputStyle}
               placeholder="user@example.com"
               placeholderTextColor={
                 placeholderColor
@@ -714,29 +949,35 @@ export default function SignUpScreen() {
               value={email}
               onChangeText={setEmail}
               editable={!isLoading}
+              returnKeyType="next"
             />
           </View>
         </View>
 
-        {/* ==================================
+        {/* =================================================
             GENDER
-        =================================== */}
+        ================================================= */}
 
         <Text
           style={[
             styles.label,
             {
-              color: colors.text,
+              color:
+                colors.text,
             },
           ]}
         >
           Gender{' '}
-          <Text style={styles.required}>
+          <Text
+            style={styles.required}
+          >
             *
           </Text>
         </Text>
 
-        <View style={styles.optionRow}>
+        <View
+          style={styles.optionRow}
+        >
           {(
             [
               'Male',
@@ -757,7 +998,6 @@ export default function SignUpScreen() {
                       selected
                         ? colors.primary
                         : colors.border,
-
                     backgroundColor:
                       selected
                         ? `${colors.primary}15`
@@ -768,16 +1008,20 @@ export default function SignUpScreen() {
                   setGender(item)
                 }
                 activeOpacity={0.8}
-                disabled={isLoading}
+                disabled={
+                  isLoading
+                }
               >
                 <Text
                   style={{
-                    color: selected
-                      ? colors.primary
-                      : colors.text,
-                    fontWeight: selected
-                      ? '700'
-                      : '500',
+                    color:
+                      selected
+                        ? colors.primary
+                        : colors.text,
+                    fontWeight:
+                      selected
+                        ? '700'
+                        : '500',
                   }}
                 >
                   {item}
@@ -787,20 +1031,23 @@ export default function SignUpScreen() {
           })}
         </View>
 
-        {/* ==================================
+        {/* =================================================
             PASSWORD
-        =================================== */}
+        ================================================= */}
 
         <Text
           style={[
             styles.label,
             {
-              color: colors.text,
+              color:
+                colors.text,
             },
           ]}
         >
           Enter Password{' '}
-          <Text style={styles.required}>
+          <Text
+            style={styles.required}
+          >
             *
           </Text>
         </Text>
@@ -812,15 +1059,8 @@ export default function SignUpScreen() {
         >
           <TextInput
             style={[
-              styles.input,
+              ...inputStyle,
               styles.passwordInput,
-              {
-                backgroundColor:
-                  colors.surface,
-                color: colors.text,
-                borderColor:
-                  colors.border,
-              },
             ]}
             placeholder="Password"
             placeholderTextColor={
@@ -834,10 +1074,13 @@ export default function SignUpScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             editable={!isLoading}
+            returnKeyType="done"
           />
 
           <TouchableOpacity
-            style={styles.eyeButton}
+            style={
+              styles.eyeButton
+            }
             onPress={() =>
               setShowPassword(
                 (previous) =>
@@ -851,7 +1094,8 @@ export default function SignUpScreen() {
               style={{
                 color:
                   colors.primary,
-                fontWeight: '600',
+                fontWeight:
+                  '600',
               }}
             >
               {showPassword
@@ -865,32 +1109,36 @@ export default function SignUpScreen() {
           style={[
             styles.hintText,
             {
-              color: colors.text,
-              opacity: 0.7,
+              color:
+                colors.text,
             },
           ]}
         >
-          Password must contain a
+          Password must contain at
+          least 8 characters with a
           capital letter, lowercase
           letter, number, and special
           character.
         </Text>
 
-        {/* ==================================
+        {/* =================================================
             ROLE
-        =================================== */}
+        ================================================= */}
 
         <Text
           style={[
             styles.label,
             {
-              color: colors.text,
+              color:
+                colors.text,
               marginTop: 16,
             },
           ]}
         >
           Select A Role{' '}
-          <Text style={styles.required}>
+          <Text
+            style={styles.required}
+          >
             *
           </Text>
         </Text>
@@ -898,21 +1146,22 @@ export default function SignUpScreen() {
         <View
           style={styles.roleContainer}
         >
-          {/* ==================================
+          {/* =================================================
               CUSTOMER
-          =================================== */}
+          ================================================= */}
 
           <TouchableOpacity
             style={[
               styles.roleCard,
               {
                 borderColor:
-                  role === 'Customer'
+                  role ===
+                  'Customer'
                     ? colors.primary
                     : colors.border,
-
                 backgroundColor:
-                  role === 'Customer'
+                  role ===
+                  'Customer'
                     ? `${colors.primary}15`
                     : colors.surface,
               },
@@ -930,13 +1179,15 @@ export default function SignUpScreen() {
                 styles.radioButton,
                 {
                   borderColor:
-                    role === 'Customer'
+                    role ===
+                    'Customer'
                       ? colors.primary
                       : colors.border,
                 },
               ]}
             >
-              {role === 'Customer' && (
+              {role ===
+                'Customer' && (
                 <View
                   style={[
                     styles.radioInner,
@@ -962,9 +1213,9 @@ export default function SignUpScreen() {
             </Text>
           </TouchableOpacity>
 
-          {/* ==================================
+          {/* =================================================
               DRIVER
-          =================================== */}
+          ================================================= */}
 
           <TouchableOpacity
             style={[
@@ -974,7 +1225,6 @@ export default function SignUpScreen() {
                   role === 'Driver'
                     ? colors.primary
                     : colors.border,
-
                 backgroundColor:
                   role === 'Driver'
                     ? `${colors.primary}15`
@@ -1000,7 +1250,8 @@ export default function SignUpScreen() {
                 },
               ]}
             >
-              {role === 'Driver' && (
+              {role ===
+                'Driver' && (
                 <View
                   style={[
                     styles.radioInner,
@@ -1027,10 +1278,9 @@ export default function SignUpScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ==================================
+        {/* =================================================
             DRIVER VEHICLE INFORMATION
-            ONLY SHOWN FOR DRIVER
-        =================================== */}
+        ================================================= */}
 
         {role === 'Driver' && (
           <View
@@ -1053,7 +1303,8 @@ export default function SignUpScreen() {
                 },
               ]}
             >
-              Driver Vehicle Information
+              Driver Vehicle
+              Information
             </Text>
 
             <Text
@@ -1065,12 +1316,15 @@ export default function SignUpScreen() {
                 },
               ]}
             >
-              Please provide your vehicle
-              details to register as a
-              Spleaz Driver.
+              Please provide your
+              vehicle details to
+              register as a Spleaz
+              Driver.
             </Text>
 
-            {/* VEHICLE */}
+            {/* =================================================
+                VEHICLE
+            ================================================= */}
 
             <Text
               style={[
@@ -1083,7 +1337,9 @@ export default function SignUpScreen() {
             >
               Vehicle{' '}
               <Text
-                style={styles.required}
+                style={
+                  styles.required
+                }
               >
                 *
               </Text>
@@ -1095,7 +1351,8 @@ export default function SignUpScreen() {
                 {
                   backgroundColor:
                     colors.background,
-                  color: colors.text,
+                  color:
+                    colors.text,
                   borderColor:
                     colors.border,
                 },
@@ -1111,7 +1368,9 @@ export default function SignUpScreen() {
               editable={!isLoading}
             />
 
-            {/* CAR COLOUR */}
+            {/* =================================================
+                CAR COLOUR
+            ================================================= */}
 
             <Text
               style={[
@@ -1125,7 +1384,9 @@ export default function SignUpScreen() {
             >
               Car Colour{' '}
               <Text
-                style={styles.required}
+                style={
+                  styles.required
+                }
               >
                 *
               </Text>
@@ -1137,7 +1398,8 @@ export default function SignUpScreen() {
                 {
                   backgroundColor:
                     colors.background,
-                  color: colors.text,
+                  color:
+                    colors.text,
                   borderColor:
                     colors.border,
                 },
@@ -1147,13 +1409,17 @@ export default function SignUpScreen() {
                 placeholderColor
               }
               value={carColor}
-              onChangeText={setCarColor}
+              onChangeText={
+                setCarColor
+              }
               autoCapitalize="words"
               autoCorrect={false}
               editable={!isLoading}
             />
 
-            {/* LICENSE PLATE */}
+            {/* =================================================
+                LICENSE PLATE
+            ================================================= */}
 
             <Text
               style={[
@@ -1167,7 +1433,9 @@ export default function SignUpScreen() {
             >
               License Plate{' '}
               <Text
-                style={styles.required}
+                style={
+                  styles.required
+                }
               >
                 *
               </Text>
@@ -1179,7 +1447,8 @@ export default function SignUpScreen() {
                 {
                   backgroundColor:
                     colors.background,
-                  color: colors.text,
+                  color:
+                    colors.text,
                   borderColor:
                     colors.border,
                 },
@@ -1188,7 +1457,9 @@ export default function SignUpScreen() {
               placeholderTextColor={
                 placeholderColor
               }
-              value={licensePlate}
+              value={
+                licensePlate
+              }
               onChangeText={
                 setLicensePlate
               }
@@ -1206,16 +1477,16 @@ export default function SignUpScreen() {
                 },
               ]}
             >
-              All vehicle information is
-              required for Driver
+              All vehicle information
+              is required for Driver
               registration.
             </Text>
           </View>
         )}
 
-        {/* ==================================
+        {/* =================================================
             SIGN UP BUTTON
-        =================================== */}
+        ================================================= */}
 
         <TouchableOpacity
           style={[
@@ -1223,12 +1494,15 @@ export default function SignUpScreen() {
             {
               backgroundColor:
                 colors.primary,
-              opacity: isLoading
-                ? 0.7
-                : 1,
+              opacity:
+                isLoading
+                  ? 0.7
+                  : 1,
             },
           ]}
-          onPress={handleSignUp}
+          onPress={
+            handleSignUp
+          }
           disabled={isLoading}
           activeOpacity={0.8}
         >
@@ -1247,12 +1521,14 @@ export default function SignUpScreen() {
           )}
         </TouchableOpacity>
 
-        {/* ==================================
+        {/* =================================================
             SIGN IN REDIRECT
-        =================================== */}
+        ================================================= */}
 
         <TouchableOpacity
-          style={styles.loginRedirect}
+          style={
+            styles.loginRedirect
+          }
           onPress={() => {
             router.push(
               '/(auth)/sign-in'
@@ -1267,13 +1543,15 @@ export default function SignUpScreen() {
                 placeholderColor,
             }}
           >
-            Already have an account?{' '}
+            Already have an
+            account?{' '}
 
             <Text
               style={{
                 color:
                   colors.primary,
-                fontWeight: '700',
+                fontWeight:
+                  '700',
               }}
             >
               Log In
@@ -1285,9 +1563,9 @@ export default function SignUpScreen() {
   );
 }
 
-// ==========================================
+// ===========================================================
 // STYLES
-// ==========================================
+// ===========================================================
 
 const styles = StyleSheet.create({
   keyboardContainer: {
@@ -1455,9 +1733,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // ==========================================
+  // =========================================================
   // DRIVER SECTION
-  // ==========================================
+  // =========================================================
 
   driverSection: {
     borderWidth: 1,
@@ -1488,6 +1766,10 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 
+  // =========================================================
+  // SUBMIT BUTTON
+  // =========================================================
+
   submitButton: {
     height: 52,
     borderRadius: 12,
@@ -1508,6 +1790,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+
+  // =========================================================
+  // LOGIN REDIRECT
+  // =========================================================
 
   loginRedirect: {
     marginTop: 20,
