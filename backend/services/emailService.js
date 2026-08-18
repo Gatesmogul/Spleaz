@@ -43,7 +43,7 @@ const sendTrackingLinkEmail = async ({
   const transporter = createTransporter();
 
   const appName = process.env.APP_NAME || 'Spleaz';
-  const fromEmail = process.env.FROM_EMAIL || `"Spleaz Safety Team" <no-reply@spleaz.com>`;
+  const fromEmail = process.env.FROM_EMAIL || `"Spleaz Safety Team" <no-reply@spleaz-app.onrender.com>`;
 
   const htmlContent = `
     <!DOCTYPE html>
