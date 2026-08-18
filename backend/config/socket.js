@@ -5,7 +5,7 @@ let io;
 
 const initSocket = (httpServer) => {
   const allowedOrigins = [
-    'https://spleaz-app.onrender.com',
+    'https://Spleaz-app.onrender.com',
     'http://localhost:8081',
     'http://localhost:19006',
   ];
