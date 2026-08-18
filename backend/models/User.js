@@ -1,10 +1,12 @@
+'use strict';
+
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema(
   {
-    // ==========================================
+    // ============================================================
     // CORE USER IDENTIFIERS
-    // ==========================================
+    // ============================================================
 
     fullName: {
       type: String,
@@ -25,31 +27,37 @@ const UserSchema = new mongoose.Schema(
       ],
     },
 
+    /*
+     * Phone is required for normal customer/driver accounts.
+     *
+     * Founder/Senior/Junior Admin accounts are created by the
+     * backend and may not have a phone number during bootstrap.
+     */
     phone: {
       type: String,
-      required: [true, 'Phone number is required'],
       unique: true,
+      sparse: true,
       trim: true,
+      default: null,
     },
 
+    /*
+     * Normal users require a password.
+     *
+     * Admin accounts initially use the secure password-setup flow,
+     * so the password may temporarily be absent until the admin
+     * completes setup.
+     */
     password: {
       type: String,
-      required: [true, 'Password is required'],
       minlength: [6, 'Password must be at least 6 characters long'],
       select: false,
+      default: null,
     },
 
-    // ==========================================
+    // ============================================================
     // USER ROLE
-    // ==========================================
-    //
-    // Public registration:
-    // - customer
-    // - driver
-    //
-    // Admin accounts are managed through the
-    // backend/admin system.
-    //
+    // ============================================================
 
     role: {
       type: String,
@@ -60,19 +68,9 @@ const UserSchema = new mongoose.Schema(
       default: 'customer',
     },
 
-    // ==========================================
+    // ============================================================
     // ADMIN ROLE & PERMISSIONS
-    // ==========================================
-    //
-    // Admin hierarchy:
-    //
-    // founder_admin
-    // senior_admin
-    // junior_admin
-    //
-    // These fields are only meaningful when:
-    // role === 'admin'
-    //
+    // ============================================================
 
     adminRole: {
       type: String,
@@ -95,9 +93,9 @@ const UserSchema = new mongoose.Schema(
       default: false,
     },
 
-    // ==========================================
+    // ============================================================
     // ACCOUNT STATUS
-    // ==========================================
+    // ============================================================
 
     isActive: {
       type: Boolean,
@@ -126,14 +124,9 @@ const UserSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // ==========================================
-    // ADMIN ACCOUNT PASSWORD SETUP
-    // ==========================================
-    //
-    // Founder/Senior/Junior admin accounts can be
-    // required to create a password through the
-    // secure password setup flow.
-    //
+    // ============================================================
+    // ADMIN PASSWORD SETUP
+    // ============================================================
 
     mustSetPassword: {
       type: Boolean,
@@ -157,13 +150,9 @@ const UserSchema = new mongoose.Schema(
       default: null,
     },
 
-    // ==========================================
+    // ============================================================
     // ADMIN AUDIT INFORMATION
-    // ==========================================
-    //
-    // Stores the admin/user identifier responsible
-    // for creating this account.
-    //
+    // ============================================================
 
     createdByAdmin: {
       type: String,
@@ -171,33 +160,40 @@ const UserSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // ============================================================
+    // PROFILE
+    // ============================================================
+
     profilePictureUrl: {
       type: String,
       default: '',
     },
 
-    // ==========================================
+    // ============================================================
     // ADDRESS DETAILS
-    // ==========================================
+    // ============================================================
 
+    /*
+     * Address information is required for normal customer/driver
+     * accounts but not for backend-created admin accounts.
+     */
     addressInfo: {
       country: {
         type: String,
-        required: [true, 'Country is required'],
         trim: true,
         default: 'Nigeria',
       },
 
       state: {
         type: String,
-        required: [true, 'State is required'],
         trim: true,
+        default: '',
       },
 
       city: {
         type: String,
-        required: [true, 'City is required'],
         trim: true,
+        default: '',
       },
 
       streetAddress: {
@@ -207,9 +203,9 @@ const UserSchema = new mongoose.Schema(
       },
     },
 
-    // ==========================================
+    // ============================================================
     // GEO LOCATION
-    // ==========================================
+    // ============================================================
 
     location: {
       type: {
@@ -241,17 +237,15 @@ const UserSchema = new mongoose.Schema(
       default: Date.now,
     },
 
-    // ==========================================
+    // ============================================================
     // DRIVER STATUS
-    // ==========================================
+    // ============================================================
 
     isOnline: {
       type: Boolean,
       default: false,
     },
 
-    // Customers are automatically approved.
-    // Drivers require admin approval.
     isApproved: {
       type: Boolean,
       default: function () {
@@ -259,9 +253,9 @@ const UserSchema = new mongoose.Schema(
       },
     },
 
-    // ==========================================
+    // ============================================================
     // DRIVER VEHICLE DETAILS
-    // ==========================================
+    // ============================================================
 
     vehicle: {
       make: {
@@ -295,9 +289,9 @@ const UserSchema = new mongoose.Schema(
       },
     },
 
-    // ==========================================
+    // ============================================================
     // RATING & RIDE METRICS
-    // ==========================================
+    // ============================================================
 
     rating: {
       type: Number,
@@ -311,9 +305,9 @@ const UserSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // ==========================================
+    // ============================================================
     // DRIVER EARNINGS
-    // ==========================================
+    // ============================================================
 
     totalEarnings: {
       type: Number,
@@ -325,31 +319,34 @@ const UserSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // ==========================================
+    // ============================================================
     // VERIFICATION
-    // ==========================================
+    // ============================================================
 
     isVerified: {
       type: Boolean,
       default: false,
     },
 
-    // Existing password-reset fields
-    // used by the normal user password recovery flow.
+    // ============================================================
+    // NORMAL USER PASSWORD RESET
+    // ============================================================
 
     passwordResetToken: {
       type: String,
       select: false,
+      default: null,
     },
 
     passwordResetExpires: {
       type: Date,
       select: false,
+      default: null,
     },
 
-    // ==========================================
+    // ============================================================
     // COMMISSION RECEIPTS
-    // ==========================================
+    // ============================================================
 
     commissionReceipts: [
       {
@@ -395,70 +392,35 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
-// ==========================================
+// ============================================================
 // GEO-SPATIAL INDEX
-// ==========================================
+// ============================================================
 
 UserSchema.index({
   location: '2dsphere',
 });
 
-// ==========================================
-// USER EMAIL INDEX
-// ==========================================
-//
-// The email field already has unique: true.
-// This explicit index makes the intended database
-// constraint clear and is safe because it matches
-// the schema definition.
-//
-
-UserSchema.index(
-  { email: 1 },
-  { unique: true }
-);
-
-// ==========================================
+// ============================================================
 // ADMIN INDEX
-// ==========================================
-//
-// Helps backend admin queries find admins by
-// admin status and hierarchy.
-//
+// ============================================================
 
 UserSchema.index({
   isAdmin: 1,
   adminRole: 1,
 });
 
-// ==========================================
+// ============================================================
 // ACCOUNT STATUS INDEX
-// ==========================================
-//
-// Helps administrative queries find suspended
-// and inactive accounts efficiently.
-//
+// ============================================================
 
 UserSchema.index({
   isSuspended: 1,
   isActive: 1,
 });
 
-// ==========================================
+// ============================================================
 // DRIVER VALIDATION
-// ==========================================
-//
-// Customers do not need vehicle information.
-//
-// Drivers MUST have:
-// - vehicle make
-// - vehicle model
-// - vehicle color
-// - license plate
-//
-// Admin accounts are not subject to driver
-// vehicle validation.
-//
+// ============================================================
 
 UserSchema.pre('validate', function (next) {
   if (this.role === 'driver') {
@@ -501,22 +463,9 @@ UserSchema.pre('validate', function (next) {
   next();
 });
 
-// ==========================================
+// ============================================================
 // ADMIN DATA VALIDATION
-// ==========================================
-//
-// Keeps admin-related fields consistent.
-//
-// If a user is not an admin:
-// - isAdmin must be false
-// - adminRole must be null
-// - adminPermissions must be empty
-//
-// If a user is an admin:
-// - role must be admin
-// - isAdmin must be true
-// - adminRole must be specified
-//
+// ============================================================
 
 UserSchema.pre('validate', function (next) {
   if (this.role !== 'admin') {
@@ -539,24 +488,16 @@ UserSchema.pre('validate', function (next) {
   next();
 });
 
-// ==========================================
+// ============================================================
 // PASSWORD CHANGE TRACKING
-// ==========================================
-//
-// When an existing user's password is changed,
-// record the time of the password change.
-//
-// This does not interfere with the password hash
-// generated by authController/adminController.
-//
+// ============================================================
 
 UserSchema.pre('save', function (next) {
   if (this.isModified('password') && !this.isNew) {
     this.passwordChangedAt = new Date();
+
     this.mustSetPassword = false;
 
-    // Invalidate any outstanding admin password
-    // setup token after the password is changed.
     this.passwordResetTokenHash = null;
     this.passwordResetExpiresAt = null;
   }
@@ -564,8 +505,8 @@ UserSchema.pre('save', function (next) {
   next();
 });
 
-// ==========================================
+// ============================================================
 // MODEL EXPORT
-// ==========================================
+// ============================================================
 
 module.exports = mongoose.model('User', UserSchema);
