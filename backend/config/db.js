@@ -9,11 +9,17 @@ const connectDB = async () => {
     mongoURI.includes('<password>')
   ) {
     throw new Error(
-      'MONGO_URI is missing or still contains placeholder credentials. Configure backend/.env with a valid MongoDB URI.'
+      'MONGO_URI is missing or still contains placeholder credentials.'
     );
   }
 
   mongoose.set('strictQuery', true);
+
+  mongoose.connection.on('connected', () => {
+    console.log(
+      `[MongoDB] Connected database: ${mongoose.connection.name}`
+    );
+  });
 
   mongoose.connection.on('disconnected', () => {
     console.warn('[MongoDB] Disconnected.');
@@ -23,18 +29,23 @@ const connectDB = async () => {
     console.error('[MongoDB] Error:', err.message);
   });
 
-  const isProduction =
-    String(process.env.NODE_ENV || '').toLowerCase() === 'production';
-
   const conn = await mongoose.connect(mongoURI, {
-    autoIndex: !isProduction,
+    autoIndex: process.env.NODE_ENV !== 'production',
     serverSelectionTimeoutMS: 10000,
     socketTimeoutMS: 45000,
   });
 
-  console.log(
-    `[MongoDB] Connected to ${conn.connection.host}/${conn.connection.name}`
-  );
+  console.log('==========================================');
+  console.log('[MongoDB] CONNECTION SUCCESSFUL');
+  console.log(`[MongoDB] Host: ${conn.connection.host}`);
+  console.log(`[MongoDB] Database: ${conn.connection.name}`);
+  console.log('==========================================');
+
+  if (conn.connection.name !== 'Spleaz') {
+    console.warn(
+      `[MongoDB] WARNING: Expected database "Spleaz" but connected to "${conn.connection.name}"`
+    );
+  }
 
   return conn;
 };
