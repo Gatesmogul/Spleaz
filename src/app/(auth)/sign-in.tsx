@@ -4,56 +4,215 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 type UserRole = 'Customer' | 'Driver';
+
+type BackendRole = 'customer' | 'driver' | 'admin';
 
 export default function SignInScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { login } = useAuth();
-  const [email,setEmail]=useState('');
-  const [password,setPassword]=useState('');
-  const [role,setRole]=useState<UserRole>('Customer');
-  const [showPassword,setShowPassword]=useState(false);
-  const [isLoading,setIsLoading]=useState(false);
-  const [isResettingPassword,setIsResettingPassword]=useState(false);
 
-  const handleSignIn=async():Promise<void>=>{
-    const normalizedEmail=email.trim().toLowerCase();
-    if(!normalizedEmail||!password){Alert.alert(t('common.error','Error'),t('auth.enterEmailAndPassword','Please enter both your registered email and password.'));return;}
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState<UserRole>('Customer');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+
+  /**
+   * Convert the frontend role to the exact role
+   * used by the backend/database.
+   */
+  const getBackendRole = (selectedRole: UserRole): 'customer' | 'driver' => {
+    return selectedRole === 'Driver' ? 'driver' : 'customer';
+  };
+
+  const handleSignIn = async (): Promise<void> => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !password) {
+      Alert.alert(
+        t('common.error', 'Error'),
+        t(
+          'auth.enterEmailAndPassword',
+          'Please enter both your registered email and password.'
+        )
+      );
+      return;
+    }
+
     setIsLoading(true);
-    try{
-      const response=await authApi.signIn({email:normalizedEmail,password});
-      const user=response.data.user;
-      const backendRole=String(user.role).toUpperCase();
-      if((role==='Driver'&&backendRole!=='DRIVER')||(role==='Customer'&&backendRole!=='RIDER')){
-        Alert.alert(t('common.error','Error'),`This account is registered as ${backendRole==='DRIVER'?'Driver':'Customer'}. Please select the correct role.`);return;
+
+    try {
+      const response = await authApi.signIn({
+        email: normalizedEmail,
+        password,
+      });
+
+      /**
+       * Backend response:
+       *
+       * data: {
+       *   user: {...},
+       *   token: "..."
+       * }
+       */
+      const user = response.data.user;
+
+      if (!user) {
+        throw new Error('User information was not returned by the server.');
       }
-      const normalizedUser={id:String(user.id),name:user.fullName,email:user.email,phoneNumber:user.phoneNumber,role:backendRole as 'RIDER'|'DRIVER'|'ADMIN',avatarUrl:user.avatarUrl,country:user.country,state:user.state,city:user.city,isVerified:true};
-      await login(response.data.token,normalizedUser);
-      router.replace(backendRole==='DRIVER'?'/(driver)/(drawer)':'/(customer)/(drawer)');
-    }catch(error:any){
-      console.error('Spleaz sign-in error:',error);
-      const message=error?.response?.data?.message||t('auth.invalidCredentials','Incorrect email or password.');
-      Alert.alert(t('common.error','Error'),message);
-    }finally{setIsLoading(false);}
+
+      /**
+       * Backend stores:
+       * customer
+       * driver
+       * admin
+       *
+       * We normalize the response to lowercase.
+       */
+      const backendRole = String(user.role || '')
+        .trim()
+        .toLowerCase() as BackendRole;
+
+      /**
+       * The selected frontend role must match
+       * the role stored in the backend.
+       */
+      const expectedRole = getBackendRole(role);
+
+      if (backendRole !== expectedRole) {
+        const registeredRole =
+          backendRole === 'driver'
+            ? 'Driver'
+            : backendRole === 'customer'
+              ? 'Customer'
+              : 'Admin';
+
+        Alert.alert(
+          t('common.error', 'Error'),
+          `This account is registered as ${registeredRole}. Please select ${registeredRole} to continue.`
+        );
+
+        return;
+      }
+
+      /**
+       * Keep the role format consistent with the rest
+       * of the application.
+       *
+       * IMPORTANT:
+       * RIDER has been removed.
+       */
+      const normalizedUser = {
+        id: String(user.id),
+        name: user.fullName || '',
+        email: user.email || normalizedEmail,
+        phoneNumber: user.phoneNumber || '',
+        role: backendRole,
+        avatarUrl: user.avatarUrl || '',
+        country: user.country || '',
+        state: user.state || '',
+        city: user.city || '',
+        isVerified: user.isVerified !== false,
+      };
+
+      /**
+       * Save authentication information.
+       */
+      await login(response.data.token, normalizedUser);
+
+      /**
+       * Send the user to the correct dashboard.
+       */
+      if (backendRole === 'driver') {
+        router.replace('/(driver)/(drawer)');
+      } else {
+        router.replace('/(customer)/(drawer)');
+      }
+    } catch (error: any) {
+      console.error('Spleaz sign-in error:', error);
+
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        t(
+          'auth.invalidCredentials',
+          'Incorrect email or password.'
+        );
+
+      Alert.alert(
+        t('common.error', 'Error'),
+        message
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleForgotPassword=async():Promise<void>=>{
-    const normalizedEmail=email.trim().toLowerCase();
-    if(!normalizedEmail){Alert.alert(t('auth.emailRequiredTitle','Email Required'),t('auth.emailRequiredForReset','Please enter your registered email address first.'));return;}
+  const handleForgotPassword = async (): Promise<void> => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      Alert.alert(
+        t('auth.emailRequiredTitle', 'Email Required'),
+        t(
+          'auth.emailRequiredForReset',
+          'Please enter your registered email address first.'
+        )
+      );
+      return;
+    }
+
     setIsResettingPassword(true);
-    try{await authApi.forgotPassword({email:normalizedEmail});Alert.alert(t('auth.resetSentTitle','Password Reset'),t('auth.resetSentMsg','If the account exists, password reset instructions have been generated.'));}
-    catch(error:any){Alert.alert(t('common.error','Error'),error?.response?.data?.message||'Unable to start password reset.');}
-    finally{setIsResettingPassword(false);}
-  };
-  const handleRegister=():void=>router.push('/(auth)/sign-up');
 
-  // ==========================================
-  // RENDER
-  // ==========================================
+    try {
+      await authApi.forgotPassword({
+        email: normalizedEmail,
+      });
+
+      Alert.alert(
+        t('auth.resetSentTitle', 'Password Reset'),
+        t(
+          'auth.resetSentMsg',
+          'If the account exists, password reset instructions have been generated.'
+        )
+      );
+    } catch (error: any) {
+      console.error(
+        'Spleaz forgot password error:',
+        error
+      );
+
+      Alert.alert(
+        t('common.error', 'Error'),
+        error?.response?.data?.message ||
+          'Unable to start password reset.'
+      );
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
+  const handleRegister = (): void => {
+    router.push('/(auth)/sign-up');
+  };
 
   return (
     <KeyboardAvoidingView
@@ -408,6 +567,7 @@ export default function SignInScreen() {
             }}
           >
             Don't have an account?{' '}
+
             <Text
               style={{
                 color: colors.primary,
@@ -559,9 +719,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-
     elevation: 2,
-
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
