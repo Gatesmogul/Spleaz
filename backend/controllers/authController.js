@@ -26,33 +26,230 @@ const normalizeRole = (role) => ({ RIDER:'customer', DRIVER:'driver', ADMIN:'adm
 
 const register = async (req, res, next) => {
   try {
-    const { fullName, email, phone, phoneNumber, password, role='customer', location, vehicle, country='Nigeria', state='', city='' } = req.body;
+    const {
+      fullName,
+      email,
+      phone,
+      phoneNumber,
+      password,
+      role = 'customer',
+      location,
+      vehicle,
+      country = 'Nigeria',
+      state = '',
+      city = '',
+    } = req.body;
+
+    console.log('[Auth/Register] Request received');
+    console.log('[Auth/Register] Database:', User.db?.name);
+    console.log('[Auth/Register] Email:', email);
+    console.log('[Auth/Register] Role:', role);
+
     const normalizedEmail = String(email || '').trim().toLowerCase();
     const normalizedPhone = String(phone || phoneNumber || '').trim();
     const normalizedRole = normalizeRole(role);
-    if (!fullName || !normalizedEmail || !normalizedPhone || !password || !state || !city) return res.status(400).json({ success:false, message:'Full name, email, phone, password, state and city are required.' });
-    if (!['customer','driver','admin'].includes(normalizedRole)) return res.status(400).json({ success:false, message:'Invalid role.' });
-    if (normalizedRole === 'driver' && (!vehicle || !vehicle.licensePlate)) return res.status(400).json({ success:false, message:'Driver registration requires vehicle details including license plate.' });
-    const existing = await User.findOne({ $or:[{email:normalizedEmail},{phone:normalizedPhone}] });
-    if (existing) return res.status(409).json({ success:false, message:'A user with this email or phone number already exists.' });
+
+    if (
+      !fullName ||
+      !normalizedEmail ||
+      !normalizedPhone ||
+      !password ||
+      !state ||
+      !city
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Full name, email, phone, password, state and city are required.',
+      });
+    }
+
+    if (!['customer', 'driver', 'admin'].includes(normalizedRole)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role.',
+      });
+    }
+
+    if (
+      normalizedRole === 'driver' &&
+      (!vehicle || !vehicle.licensePlate)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Driver registration requires vehicle details including license plate.',
+      });
+    }
+
+    console.log('[Auth/Register] Checking existing user...');
+
+    const existing = await User.findOne({
+      $or: [
+        { email: normalizedEmail },
+        { phone: normalizedPhone },
+      ],
+    });
+
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        message:
+          'A user with this email or phone number already exists.',
+      });
+    }
+
+    console.log('[Auth/Register] Hashing password...');
+
     const hashed = await bcrypt.hash(password, 12);
-    const hasLocation = location && Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude));
-    const user = await User.create({ fullName:fullName.trim(), email:normalizedEmail, phone:normalizedPhone, password:hashed, role:normalizedRole, addressInfo:{country, state, city}, location:hasLocation ? { type:'Point', coordinates:[Number(location.longitude),Number(location.latitude)], address:location.address || '' } : undefined, vehicle:normalizedRole === 'driver' ? vehicle : undefined, isOnline:false });
-    return res.status(201).json({ success:true, message:'Registration successful.', data:{ user:publicUser(user), token:generateToken(user._id,user.role) } });
-  } catch (error) { next(error); }
+
+    const hasLocation =
+      location &&
+      Number.isFinite(Number(location.latitude)) &&
+      Number.isFinite(Number(location.longitude));
+
+    console.log('[Auth/Register] Creating user...');
+    console.log(
+      '[Auth/Register] Mongoose database:',
+      User.db?.name
+    );
+    console.log(
+      '[Auth/Register] Mongoose collection:',
+      User.collection?.name
+    );
+
+    const user = await User.create({
+      fullName: fullName.trim(),
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      password: hashed,
+      role: normalizedRole,
+
+      addressInfo: {
+        country,
+        state,
+        city,
+      },
+
+      location: hasLocation
+        ? {
+            type: 'Point',
+            coordinates: [
+              Number(location.longitude),
+              Number(location.latitude),
+            ],
+            address: location.address || '',
+          }
+        : undefined,
+
+      vehicle:
+        normalizedRole === 'driver'
+          ? vehicle
+          : undefined,
+
+      isOnline: false,
+    });
+
+    console.log(
+      '[Auth/Register] User created successfully:',
+      user._id
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: 'Registration successful.',
+      data: {
+        user: publicUser(user),
+        token: generateToken(user._id, user.role),
+      },
+    });
+  } catch (error) {
+    console.error('[Auth/Register] FAILED');
+    console.error('[Auth/Register] Database:', User.db?.name);
+    console.error('[Auth/Register] Collection:', User.collection?.name);
+    console.error(error);
+
+    next(error);
+  }
 };
+
 
 const login = async (req, res, next) => {
   try {
-    const { email, password, location } = req.body;
-    const user = await User.findOne({ email:String(email || '').trim().toLowerCase() }).select('+password');
-    if (!user || !(await bcrypt.compare(password || '', user.password))) return res.status(401).json({success:false,message:'Invalid email or password.'});
-    if (location && Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude))) {
-      user.location = { type:'Point', coordinates:[Number(location.longitude),Number(location.latitude)], address:location.address || user.location?.address || '' };
+    const {
+      email,
+      password,
+      location,
+    } = req.body;
+
+    console.log('[Auth/Login] Request received');
+    console.log('[Auth/Login] Database:', User.db?.name);
+    console.log('[Auth/Login] Email:', email);
+
+    const normalizedEmail = String(email || '')
+      .trim()
+      .toLowerCase();
+
+    const user = await User.findOne({
+      email: normalizedEmail,
+    }).select('+password');
+
+    console.log(
+      '[Auth/Login] User found:',
+      user ? user._id : 'NO USER'
+    );
+
+    if (
+      !user ||
+      !(await bcrypt.compare(password || '', user.password))
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password.',
+      });
+    }
+
+    if (
+      location &&
+      Number.isFinite(Number(location.latitude)) &&
+      Number.isFinite(Number(location.longitude))
+    ) {
+      user.location = {
+        type: 'Point',
+        coordinates: [
+          Number(location.longitude),
+          Number(location.latitude),
+        ],
+        address:
+          location.address ||
+          user.location?.address ||
+          '',
+      };
+
       await user.save();
     }
-    return res.json({ success:true, message:'Logged in successfully.', data:{ user:publicUser(user), token:generateToken(user._id,user.role) } });
-  } catch (error) { next(error); }
+
+    console.log(
+      '[Auth/Login] Login successful:',
+      user._id
+    );
+
+    return res.json({
+      success: true,
+      message: 'Logged in successfully.',
+      data: {
+        user: publicUser(user),
+        token: generateToken(user._id, user.role),
+      },
+    });
+  } catch (error) {
+    console.error('[Auth/Login] FAILED');
+    console.error('[Auth/Login] Database:', User.db?.name);
+    console.error('[Auth/Login] Collection:', User.collection?.name);
+    console.error(error);
+
+    next(error);
+  }
 };
 
 const getMe = async (req,res,next) => { try { const user=await User.findById(req.user.id); if(!user) return res.status(404).json({success:false,message:'User not found.'}); res.json({success:true,data:publicUser(user)}); } catch(e){next(e);} };
